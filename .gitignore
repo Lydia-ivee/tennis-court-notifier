@@ -1,0 +1,6 @@
+.dev.vars
+wrangler.toml
+node_modules/
+.wrangler/
+.env
+.DS_Store

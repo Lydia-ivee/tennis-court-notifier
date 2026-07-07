@@ -1,0 +1,295 @@
+:root {
+    --stone-dark: #2b2a28;
+    --stone: #3a3835;
+    --parchment: #efe4c9;
+    --parchment-line: #d8c8a0;
+    --gold: #d4af37;
+    --gold-bright: #f0d67a;
+    --gold-deep: #9c7a1e;
+    --ink: #2c2415;
+    --moss: #4a5d3a;
+    --crimson: #7a2d2d;
+    --shadow: rgba(0, 0, 0, 0.45);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    min-height: 100vh;
+    padding: 2.5rem 1rem;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    font-family: 'EB Garamond', Georgia, serif;
+    color: var(--ink);
+    /* Layered stone: radial soot + a subtle woven texture */
+    background-color: var(--stone-dark);
+    background-image:
+        radial-gradient(circle at 50% 0%, #45423d 0%, #211f1d 70%),
+        repeating-linear-gradient(45deg, rgba(0,0,0,0.06) 0 2px, transparent 2px 6px);
+    background-attachment: fixed;
+}
+
+/* ---- The Scroll ---- */
+.scroll {
+    width: 100%;
+    max-width: 560px;
+    background-color: var(--parchment);
+    background-image:
+        radial-gradient(ellipse at top, rgba(255,255,255,0.35), transparent 60%),
+        repeating-linear-gradient(0deg, rgba(120,90,40,0.04) 0 24px, transparent 24px 25px);
+    border: 2px solid var(--gold-deep);
+    border-radius: 6px;
+    padding: 2.5rem 2.25rem 2rem;
+    box-shadow:
+        0 0 0 6px rgba(0,0,0,0.25),
+        0 18px 50px var(--shadow),
+        inset 0 0 60px rgba(120, 90, 40, 0.18);
+    position: relative;
+}
+
+/* Gilded corner rivets */
+.scroll::before,
+.scroll::after {
+    content: "";
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, var(--gold-bright), var(--gold-deep));
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.3);
+}
+.scroll::before { top: 12px; left: 12px; }
+.scroll::after { top: 12px; right: 12px; }
+
+/* ---- Header ---- */
+.header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.crest {
+    font-size: 4.5rem;
+    line-height: 1;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.4));
+    animation: bob 4s ease-in-out infinite;
+}
+
+@keyframes bob {
+    0%, 100% { transform: translateY(0) rotate(-4deg); }
+    50% { transform: translateY(-8px) rotate(4deg); }
+}
+
+h1 {
+    font-family: 'Cinzel', serif;
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: 0.02em;
+    color: var(--ink);
+    margin: 0.5rem 0 0.25rem;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+}
+
+.subtitle {
+    font-style: italic;
+    font-size: 1.05rem;
+    color: var(--gold-deep);
+}
+
+/* Divider flourish under header */
+.header::after {
+    content: "⚜";
+    display: block;
+    margin-top: 0.75rem;
+    color: var(--gold-deep);
+    font-size: 1.1rem;
+}
+
+/* ---- Fields ---- */
+.field {
+    margin-bottom: 1.75rem;
+}
+
+.field-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 0.6rem;
+}
+
+label {
+    display: block;
+    font-family: 'Cinzel', serif;
+    font-size: 0.95rem;
+    letter-spacing: 0.04em;
+    color: var(--stone);
+}
+
+.select-all {
+    font-family: 'EB Garamond', serif;
+    font-size: 0.85rem;
+    font-style: italic;
+    color: var(--gold-deep);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: underline dotted;
+}
+.select-all:hover { color: var(--ink); }
+
+input[type="email"] {
+    width: 100%;
+    padding: 0.75rem 0.9rem;
+    font-family: 'EB Garamond', serif;
+    font-size: 1.05rem;
+    color: var(--ink);
+    background-color: rgba(255,255,255,0.55);
+    border: 1.5px solid var(--parchment-line);
+    border-radius: 4px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+input[type="email"]::placeholder { color: #9a8c68; }
+input[type="email"]:focus {
+    outline: none;
+    border-color: var(--gold);
+    box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.25);
+}
+
+/* ---- Chips (days + times) ---- */
+.chips {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.5rem;
+}
+.chips--time {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.chip {
+    position: relative;
+    cursor: pointer;
+}
+.chip input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.chip span {
+    display: block;
+    text-align: center;
+    padding: 0.55rem 0.25rem;
+    font-size: 0.9rem;
+    color: var(--stone);
+    background-color: rgba(255,255,255,0.4);
+    border: 1.5px solid var(--parchment-line);
+    border-radius: 4px;
+    transition: all 0.15s ease;
+    user-select: none;
+}
+.chip:hover span {
+    border-color: var(--gold);
+    background-color: rgba(255,255,255,0.7);
+}
+.chip input:checked + span {
+    color: var(--ink);
+    font-weight: 700;
+    background: linear-gradient(160deg, var(--gold-bright), var(--gold));
+    border-color: var(--gold-deep);
+    box-shadow: 0 2px 6px rgba(156, 122, 30, 0.4);
+}
+.chip input:focus-visible + span {
+    outline: 2px solid var(--gold-deep);
+    outline-offset: 2px;
+}
+
+/* ---- Submit ---- */
+.btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    width: 100%;
+    margin-top: 0.5rem;
+    padding: 0.9rem;
+    font-family: 'Cinzel', serif;
+    font-weight: 700;
+    font-size: 1.15rem;
+    letter-spacing: 0.05em;
+    color: var(--parchment);
+    cursor: pointer;
+    background: linear-gradient(160deg, var(--moss), #33422a);
+    border: 2px solid var(--gold-deep);
+    border-radius: 5px;
+    box-shadow: 0 4px 0 var(--gold-deep), 0 8px 16px var(--shadow);
+    transition: transform 0.1s, box-shadow 0.1s, filter 0.2s;
+}
+.btn:hover { filter: brightness(1.1); }
+.btn:active {
+    transform: translateY(3px);
+    box-shadow: 0 1px 0 var(--gold-deep), 0 3px 8px var(--shadow);
+}
+.btn:disabled {
+    cursor: not-allowed;
+    filter: grayscale(0.5) brightness(0.9);
+}
+.btn-emoji {
+    font-size: 1.3rem;
+    filter: drop-shadow(0 1px 1px rgba(0,0,0,0.4));
+}
+
+/* ---- Status ---- */
+.status {
+    margin-top: 1.25rem;
+    padding: 0;
+    text-align: center;
+    font-size: 1.05rem;
+    border-radius: 4px;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: all 0.3s ease;
+}
+.status.show {
+    padding: 0.85rem 1rem;
+    max-height: 200px;
+    opacity: 1;
+}
+.status.success {
+    color: #2f4021;
+    background-color: rgba(74, 93, 58, 0.18);
+    border: 1.5px solid var(--moss);
+}
+.status.error {
+    color: var(--crimson);
+    background-color: rgba(122, 45, 45, 0.12);
+    border: 1.5px solid var(--crimson);
+}
+.status.pending {
+    color: var(--gold-deep);
+    background-color: rgba(212, 175, 55, 0.12);
+    border: 1.5px solid var(--gold);
+}
+
+/* ---- Footer ---- */
+.footer {
+    margin-top: 1.75rem;
+    text-align: center;
+    font-style: italic;
+    font-size: 0.85rem;
+    color: #8a7a54;
+}
+
+/* ---- Small screens ---- */
+@media (max-width: 460px) {
+    .scroll { padding: 1.75rem 1.25rem; }
+    h1 { font-size: 1.6rem; }
+    .crest { font-size: 3.5rem; }
+    .chips { grid-template-columns: repeat(4, 1fr); }
+    .chips--time { grid-template-columns: repeat(3, 1fr); }
+}
