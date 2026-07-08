@@ -1,0 +1,34 @@
+name = "tennis-court-notifier"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+account_id = "YOUR_CLOUDFLARE_ACCOUNT_ID"
+workers_dev = true
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[triggers]
+crons = ["*/30 * * * *"]  # every 30 mins
+
+[[kv_namespaces]]
+binding = "PREFERENCES"
+id = "YOUR_KV_NAMESPACE_ID"
+preview_id = "YOUR_KV_NAMESPACE_ID"
+
+# Named environments do NOT inherit top-level bindings — every binding above
+# must be repeated here for `wrangler deploy --env production` to work.
+[env.production]
+name = "tennis-court-notifier-prod"
+
+[env.production.assets]
+directory = "./public"
+binding = "ASSETS"
+
+[env.production.triggers]
+crons = ["*/30 * * * *"]  # every 30 mins
+
+[[env.production.kv_namespaces]]
+binding = "PREFERENCES"
+id = "YOUR_KV_NAMESPACE_ID"
+preview_id = "YOUR_KV_NAMESPACE_ID"
