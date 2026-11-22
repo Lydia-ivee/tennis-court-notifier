@@ -10,6 +10,13 @@
       href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:ital@0;1&display=swap"
       rel="stylesheet"
     />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="/icons/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="theme-color" content="#2b2a28" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Court Quest" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -26,6 +33,42 @@
         <p id="promptText"></p>
         <button type="button" class="btn" id="promptBtn"></button>
       </div>
+
+      <section id="linkPanel" class="panel" hidden>
+        <p class="panel-title">Link this device</p>
+        <form id="linkEmailForm" novalidate>
+          <p class="hint hint--small">
+            Enter the address thy alerts go to and we shall email a six-digit code.
+          </p>
+          <label for="linkEmail" class="sr-only">Email</label>
+          <input
+            type="email"
+            id="linkEmail"
+            autocomplete="email"
+            placeholder="knight@camelot.co.uk"
+            required
+          />
+          <button type="submit" class="btn">
+            <span class="btn-label">Send me a code</span>
+          </button>
+        </form>
+        <form id="linkCodeForm" novalidate hidden>
+          <label for="linkCode" class="field-label">Code from the email</label>
+          <input
+            id="linkCode"
+            class="code-input"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            maxlength="6"
+            placeholder="123456"
+            required
+          />
+          <button type="submit" class="btn">
+            <span class="btn-label">Link this device</span>
+          </button>
+        </form>
+        <p class="hint hint--small">New here? <a href="/">Sign up first</a>.</p>
+      </section>
 
       <section id="settings" hidden>
         <div class="panel">
@@ -44,6 +87,42 @@
             ></button>
           </div>
           <button type="button" class="link-btn" id="snoozeBtn">Pause for a week</button>
+        </div>
+
+        <div class="panel" id="channels">
+          <p class="panel-title">Where to send word</p>
+          <div class="setting-row">
+            <div>
+              <div class="setting-title" id="emailLabel">Email</div>
+              <div class="setting-sub" id="emailText"></div>
+            </div>
+            <button
+              type="button"
+              class="switch"
+              id="emailSwitch"
+              role="switch"
+              aria-checked="true"
+              aria-labelledby="emailLabel"
+            ></button>
+          </div>
+          <div class="setting-row setting-row--spaced">
+            <div>
+              <div class="setting-title" id="deviceLabel">This device</div>
+              <div class="setting-sub" id="deviceText">Checking...</div>
+            </div>
+            <button
+              type="button"
+              class="switch"
+              id="deviceSwitch"
+              role="switch"
+              aria-checked="false"
+              aria-labelledby="deviceLabel"
+              disabled
+            ></button>
+          </div>
+          <p id="deviceHint" class="hint hint--small" hidden></p>
+          <p id="otherDevices" class="setting-sub" hidden></p>
+          <button type="button" class="link-btn" id="testBtn" hidden>Send a test alert</button>
         </div>
 
         <form id="prefsForm" class="manage-form" novalidate>

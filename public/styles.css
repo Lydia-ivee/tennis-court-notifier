@@ -170,6 +170,28 @@ input[type='email'] {
     border-color 0.2s,
     box-shadow 0.2s;
 }
+#linkPanel .btn {
+  margin-top: 1rem;
+}
+.code-input {
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.75rem 0.9rem;
+  font-family: 'Cinzel', serif;
+  font-size: 1.6rem;
+  letter-spacing: 0.4em;
+  text-align: center;
+  color: var(--ink);
+  background-color: rgba(255, 255, 255, 0.55);
+  border: 1.5px solid var(--parchment-line);
+  border-radius: 4px;
+}
+.code-input:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.25);
+}
+
 input[type='email']::placeholder {
   color: #9a8c68;
 }
@@ -556,6 +578,30 @@ a.btn {
 
 .manage-form {
   margin-top: 1.5rem;
+}
+
+.panel-title {
+  margin: 0 0 0.75rem;
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  color: var(--gold-deep);
+}
+.setting-row--spaced {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px dashed var(--parchment-line);
+}
+.switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.hint--small {
+  margin: 0.6rem 0 0;
+  font-size: 0.9rem;
+}
+#otherDevices {
+  margin-top: 0.6rem;
 }
 
 /* ---- Footer ---- */

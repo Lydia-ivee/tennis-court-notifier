@@ -4,20 +4,7 @@
 // `purpose` so a token minted for one job cannot be replayed for another.
 // Nothing is stored in KV, so there is no token table to leak or clean up.
 
-const encoder = new TextEncoder();
-const decoder = new TextDecoder();
-
-function toBase64Url(bytes) {
-  let binary = '';
-  for (const b of bytes) binary += String.fromCharCode(b);
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-function fromBase64Url(text) {
-  const padded = text.replace(/-/g, '+').replace(/_/g, '/');
-  const binary = atob(padded + '='.repeat((4 - (padded.length % 4)) % 4));
-  return Uint8Array.from(binary, (c) => c.charCodeAt(0));
-}
+import { decoder, encoder, fromBase64Url, toBase64Url } from './encoding.js';
 
 async function hmacKey(secret) {
   if (!secret || secret.length < 32) {

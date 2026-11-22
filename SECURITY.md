@@ -15,7 +15,9 @@ rather than opening a public issue. I will reply as soon as I can.
 - **Rate limits.** Sign-ups are limited per IP address, and each inbox gets at most one confirmation email every 10 minutes.
 - **Strict input handling.** Days and times are checked against fixed allowlists, bodies are size-capped, and everything placed in an email is HTML-escaped, including data from the booking site.
 - **No action on page load.** Turn-off and snooze links from emails ask for one tap before acting, so mail scanners that open links change nothing.
+- **Push alerts.** Notifications are end-to-end encrypted to each device (RFC 8291) and signed with VAPID (RFC 8292). The Worker only sends to an allowlist of real push services, so a forged subscription cannot aim it at other URLs. Push endpoints never leave the server; the settings page sees only a hashed id and a coarse label like "iPhone". The service worker only opens the booking site.
+- **Linking an installed app.** Six-digit codes are stored hashed, allow five guesses, expire after ten minutes, are limited to one per inbox per minute plus the per-IP limit, and the request answers the same whether or not an address is subscribed.
 - **Locked-down pages.** Static pages ship with a strict Content Security Policy and no inline scripts.
 - **Privacy in logs.** Email addresses are masked in log output.
 
-Rotating `TOKEN_SECRET` invalidates every outstanding confirm and manage link at once.
+Rotating `TOKEN_SECRET` invalidates every outstanding confirm and manage link at once. Rotating the VAPID keys means every device must turn push alerts on again.

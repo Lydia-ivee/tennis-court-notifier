@@ -18,7 +18,7 @@ async function confirm() {
     const data = await api('/api/subscriptions/confirm', { method: 'POST', body: { token } });
     showStatus(
       status,
-      'Huzzah! Thy quest has begun. We shall send word when a court falls free.',
+      'Huzzah! Thy quest has begun. For instant alerts on thy phone, open thy settings and turn on This device.',
       'success',
     );
     renderPreferences(summary, data.preferences);

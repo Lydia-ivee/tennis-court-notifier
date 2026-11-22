@@ -1,4 +1,40 @@
+import { createECDH, generateKeyPairSync } from 'node:crypto';
+import ece from 'http_ece';
 import { vi } from 'vitest';
+
+// A VAPID key pair for the test server, in the same base64url form as the secrets.
+function testVapidKeys() {
+  const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  const jwk = privateKey.export({ format: 'jwk' });
+  const b = (s) => Buffer.from(s, 'base64url');
+  return {
+    publicKey: Buffer.concat([Buffer.from([4]), b(jwk.x), b(jwk.y)]).toString('base64url'),
+    privateKey: jwk.d,
+  };
+}
+const VAPID = testVapidKeys();
+
+// A browser push subscription with real keys, plus a way to read what was sent to it.
+export function makeDevice(endpoint = 'https://fcm.googleapis.com/fcm/send/device-1') {
+  const ecdh = createECDH('prime256v1');
+  ecdh.generateKeys();
+  const auth = Buffer.from(crypto.getRandomValues(new Uint8Array(16)));
+  return {
+    subscription: {
+      endpoint,
+      keys: { p256dh: ecdh.getPublicKey().toString('base64url'), auth: auth.toString('base64url') },
+    },
+    // Decrypt a captured push body exactly as the browser would.
+    read(body) {
+      const plain = ece.decrypt(Buffer.from(body), {
+        version: 'aes128gcm',
+        privateKey: ecdh,
+        authSecret: auth,
+      });
+      return JSON.parse(plain.toString());
+    },
+  };
+}
 
 // In-memory stand-in for a Workers KV namespace (get/put/delete/list).
 export function createKV() {
@@ -37,15 +73,22 @@ export function createEnv(overrides = {}) {
     FROM_EMAIL: 'alerts@example.com',
     TOKEN_SECRET: 'test-secret-that-is-definitely-long-enough-123',
     PUBLIC_URL: 'https://courts.example.com',
+    VAPID_PUBLIC_KEY: VAPID.publicKey,
+    VAPID_PRIVATE_KEY: VAPID.privateKey,
     ...overrides,
   };
 }
 
 // Stub global fetch. SendGrid calls are captured in `sent`; booking API calls
 // are answered by `bookingHandler(date)`.
-export function stubFetch({ bookingHandler = () => ({ data: [] }), sendgridStatus = 202 } = {}) {
+export function stubFetch({
+  bookingHandler = () => ({ data: [] }),
+  sendgridStatus = 202,
+  pushStatus = () => 201,
+} = {}) {
   const sent = [];
   const bookingCalls = [];
+  const pushes = [];
   const fetchMock = vi.fn(async (url, init = {}) => {
     const href = String(url);
     if (href.startsWith('https://api.sendgrid.com/')) {
@@ -59,10 +102,14 @@ export function stubFetch({ bookingHandler = () => ({ data: [] }), sendgridStatu
       if (result instanceof Response) return result;
       return Response.json(result);
     }
+    if (href.startsWith('https://fcm.googleapis.com/') || href.includes('push.apple.com')) {
+      pushes.push({ url: href, headers: init.headers, body: init.body });
+      return new Response(null, { status: pushStatus(href) });
+    }
     throw new Error(`unexpected fetch: ${href}`);
   });
   vi.stubGlobal('fetch', fetchMock);
-  return { sent, bookingCalls, fetchMock };
+  return { sent, bookingCalls, pushes, fetchMock };
 }
 
 export function apiRequest(path, { method = 'GET', body, headers = {} } = {}) {

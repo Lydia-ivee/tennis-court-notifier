@@ -1,9 +1,39 @@
-import { HORIZON_DAYS, LIMITS, keys } from './config.js';
+import { HORIZON_DAYS, LIMITS, PUSH, keys } from './config.js';
 import { fetchSlots, upcomingDates } from './availability.js';
 import { buildAlertEmail, sendEmail } from './email.js';
+import { pruneDevices } from './devices.js';
 import { log, maskEmail } from './http.js';
 import { findMatches, isPaused, unseen, updateSeen } from './matching.js';
+import { buildPushPayload } from './notifications.js';
 import { manageLinks } from './subscriptions.js';
+import { sendPush, vapidFromEnv } from './webpush.js';
+
+// Tell one subscriber about fresh slots on every channel they chose.
+// Returns what happened so the caller can count it.
+async function deliver(env, sub, fresh, vapid) {
+  const outcome = { email: false, pushes: 0, gone: [] };
+
+  if (sub.emailAlerts !== false) {
+    const { manageUrl, unsubscribeUrl } = await manageLinks(env, sub.email);
+    outcome.email = await sendEmail(env, sub.email, buildAlertEmail(sub.email, fresh, manageUrl), {
+      unsubscribeUrl,
+    });
+  }
+
+  const devices = vapid ? sub.push || [] : [];
+  if (devices.length) {
+    const payload = buildPushPayload(fresh);
+    const results = await Promise.all(
+      devices.map((d) => sendPush(d, payload, vapid, { ttlSeconds: PUSH.ttlSeconds })),
+    );
+    results.forEach((r, i) => {
+      if (r.ok) outcome.pushes++;
+      else if (r.gone) outcome.gone.push(devices[i].endpoint);
+      else log('push_failed', { to: maskEmail(sub.email), status: r.status });
+    });
+  }
+  return outcome;
+}
 
 async function loadSubscribers(env) {
   const subscribers = [];
@@ -34,6 +64,8 @@ export async function runCheck(env, { now = new Date(), fetchOpts } = {}) {
     subscribers: subscribers.length,
     paused: everyone.length - subscribers.length,
     emailsSent: 0,
+    pushesSent: 0,
+    devicesRemoved: 0,
     errors: 0,
   };
   if (subscribers.length === 0) {
@@ -66,21 +98,23 @@ export async function runCheck(env, { now = new Date(), fetchOpts } = {}) {
     JSON.stringify({ checkedAt: now.toISOString(), openSlots, datesChecked: summary.datesChecked }),
   );
 
+  const vapid = vapidFromEnv(env);
   for (const sub of subscribers) {
     try {
       const seenIds = JSON.parse((await env.PREFERENCES.get(keys.seen(sub.email))) || '[]');
       const fresh = unseen(findMatches(sub, horizon, slotsByDate), seenIds);
       if (fresh.length === 0) continue;
 
-      const { manageUrl, unsubscribeUrl } = await manageLinks(env, sub.email);
-      const sent = await sendEmail(env, sub.email, buildAlertEmail(sub.email, fresh, manageUrl), {
-        unsubscribeUrl,
-      });
-      if (!sent) {
+      const outcome = await deliver(env, sub, fresh, vapid);
+      if (outcome.email) summary.emailsSent++;
+      summary.pushesSent += outcome.pushes;
+      summary.devicesRemoved += await pruneDevices(env, sub.email, outcome.gone);
+
+      // Only remember slots that reached them somehow, so a failure retries next run.
+      if (!outcome.email && outcome.pushes === 0) {
         summary.errors++;
         continue;
       }
-      summary.emailsSent++;
       await env.PREFERENCES.put(
         keys.seen(sub.email),
         JSON.stringify(updateSeen(seenIds, fresh, today)),

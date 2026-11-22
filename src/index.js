@@ -1,12 +1,17 @@
 import { runCheck } from './check.js';
 import { HttpError, errorResponse } from './http.js';
+import { requestLinkCode, verifyLinkCode } from './linking.js';
 import {
+  addPushDevice,
   confirmSubscription,
   deleteSubscription,
+  getPushKey,
   getStatus,
   getSubscription,
   oneClickUnsubscribe,
+  removePushDevice,
   requestSubscription,
+  testPush,
   updateSubscription,
 } from './subscriptions.js';
 
@@ -19,6 +24,12 @@ const routes = {
   'PATCH /api/subscription': updateSubscription,
   'DELETE /api/subscription': deleteSubscription,
   'GET /api/status': getStatus,
+  'GET /api/push/key': getPushKey,
+  'POST /api/subscription/push': addPushDevice,
+  'DELETE /api/subscription/push': removePushDevice,
+  'POST /api/subscription/push/test': testPush,
+  'POST /api/link/request': requestLinkCode,
+  'POST /api/link/verify': verifyLinkCode,
   'POST /api/unsubscribe': oneClickUnsubscribe,
 };
 
