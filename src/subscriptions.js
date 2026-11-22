@@ -2,7 +2,7 @@ import { LIMITS, keys } from './config.js';
 import { buildConfirmEmail, sendEmail } from './email.js';
 import { HttpError, bearerToken, json, log, maskEmail, readJson } from './http.js';
 import { confirmToken, manageToken, verifyToken } from './tokens.js';
-import { parseSubscription } from './validation.js';
+import { parseSettings, parseSubscription } from './validation.js';
 
 // Base URL for links in emails. Cron runs have no request, so PUBLIC_URL is
 // the source of truth; the request origin is only a local-dev fallback.
@@ -23,7 +23,13 @@ export async function manageLinks(env, email, request) {
   };
 }
 
-const publicView = ({ email, days, times }) => ({ email, days, times });
+const publicView = ({ email, days, times, paused, pausedUntil }) => ({
+  email,
+  days,
+  times,
+  paused: Boolean(paused),
+  pausedUntil: pausedUntil || null,
+});
 
 async function enforceRateLimit(request, env) {
   if (!env.SUBSCRIBE_LIMITER) return;
@@ -75,7 +81,18 @@ export async function confirmSubscription(request, env) {
   const key = keys.subscriber(email);
   const existing = JSON.parse((await env.PREFERENCES.get(key)) || 'null');
   const now = new Date().toISOString();
-  const record = { email, days, times, createdAt: existing?.createdAt || now, updatedAt: now };
+  // Confirming again (for example after changing choices on the sign-up page)
+  // also turns alerts back on.
+  const record = {
+    ...existing,
+    email,
+    days,
+    times,
+    paused: false,
+    pausedUntil: null,
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+  };
 
   await env.PREFERENCES.put(key, JSON.stringify(record));
   await env.PREFERENCES.delete(keys.cooldown(email));
@@ -93,6 +110,29 @@ export async function getSubscription(request, env) {
   const stored = await env.PREFERENCES.get(keys.subscriber(email));
   if (!stored) throw new HttpError(404, 'No alerts are set up for this address.');
   return json({ preferences: publicView(JSON.parse(stored)) });
+}
+
+// PATCH /api/subscription  (Authorization: Bearer <manage token>)
+// Change days or times, or pause and resume, without another confirmation:
+// holding the manage token already proves the inbox is theirs.
+export async function updateSubscription(request, env) {
+  const email = await requireManageToken(request, env);
+  const changes = parseSettings(await readJson(request, LIMITS.maxBodyBytes));
+  const key = keys.subscriber(email);
+  const stored = await env.PREFERENCES.get(key);
+  if (!stored) throw new HttpError(404, 'No alerts are set up for this address.');
+
+  const record = { ...JSON.parse(stored), ...changes, updatedAt: new Date().toISOString() };
+  await env.PREFERENCES.put(key, JSON.stringify(record));
+  log('subscription_updated', { to: maskEmail(email), fields: Object.keys(changes) });
+  return json({ preferences: publicView(record) });
+}
+
+// GET /api/status  When the courts were last checked, for the sign-up page.
+export async function getStatus(_request, env) {
+  const stored = await env.PREFERENCES.get(keys.status);
+  const status = stored ? JSON.parse(stored) : { checkedAt: null, openSlots: null };
+  return json(status, 200, { 'Cache-Control': 'public, max-age=60' });
 }
 
 async function removeSubscriber(env, email) {

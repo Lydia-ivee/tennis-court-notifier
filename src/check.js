@@ -2,7 +2,7 @@ import { HORIZON_DAYS, LIMITS, keys } from './config.js';
 import { fetchSlots, upcomingDates } from './availability.js';
 import { buildAlertEmail, sendEmail } from './email.js';
 import { log, maskEmail } from './http.js';
-import { findMatches, unseen, updateSeen } from './matching.js';
+import { findMatches, isPaused, unseen, updateSeen } from './matching.js';
 import { manageLinks } from './subscriptions.js';
 
 async function loadSubscribers(env) {
@@ -27,8 +27,15 @@ async function loadSubscribers(env) {
 // The scheduled job: fetch availability once per wanted date, then email each
 // subscriber only about slots they have not already been told about.
 export async function runCheck(env, { now = new Date(), fetchOpts } = {}) {
-  const subscribers = await loadSubscribers(env);
-  const summary = { datesChecked: 0, subscribers: subscribers.length, emailsSent: 0, errors: 0 };
+  const everyone = await loadSubscribers(env);
+  const subscribers = everyone.filter((s) => !isPaused(s, now));
+  const summary = {
+    datesChecked: 0,
+    subscribers: subscribers.length,
+    paused: everyone.length - subscribers.length,
+    emailsSent: 0,
+    errors: 0,
+  };
   if (subscribers.length === 0) {
     log('check_complete', summary);
     return summary;
@@ -51,6 +58,13 @@ export async function runCheck(env, { now = new Date(), fetchOpts } = {}) {
       log('availability_failed', { date, message: err.message });
     }
   }
+
+  // Public, anonymous summary for the "last checked" line on the sign-up page.
+  const openSlots = Object.values(slotsByDate).reduce((n, slots) => n + slots.length, 0);
+  await env.PREFERENCES.put(
+    keys.status,
+    JSON.stringify({ checkedAt: now.toISOString(), openSlots, datesChecked: summary.datesChecked }),
+  );
 
   for (const sub of subscribers) {
     try {

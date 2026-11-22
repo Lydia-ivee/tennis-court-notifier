@@ -16,8 +16,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function addSubscriber(email, days, times) {
-  await env.PREFERENCES.put(`pref:${email}`, JSON.stringify({ email, days, times }));
+async function addSubscriber(email, days, times, extra = {}) {
+  await env.PREFERENCES.put(`pref:${email}`, JSON.stringify({ email, days, times, ...extra }));
 }
 
 describe('runCheck', () => {
@@ -102,5 +102,37 @@ describe('runCheck', () => {
     const summary = await runCheck(env, { now: NOW, fetchOpts });
     expect(summary.subscribers).toBe(5);
     expect(sent).toHaveLength(5);
+  });
+
+  it('skips paused subscribers and does not fetch for them', async () => {
+    await addSubscriber('a@example.com', ['Monday'], ['07:00'], { paused: true });
+    const { bookingCalls, sent } = stubFetch({
+      bookingHandler: () => ({ data: [bookableSlot('07:00')] }),
+    });
+    const summary = await runCheck(env, { now: NOW, fetchOpts });
+    expect(summary).toMatchObject({ subscribers: 0, paused: 1, emailsSent: 0 });
+    expect(bookingCalls).toEqual([]);
+    expect(sent).toHaveLength(0);
+  });
+
+  it('resumes by itself once a timed pause has passed', async () => {
+    await addSubscriber('a@example.com', ['Monday'], ['07:00'], {
+      paused: true,
+      pausedUntil: '2026-07-06T09:00:00.000Z',
+    });
+    const { sent } = stubFetch({ bookingHandler: () => ({ data: [bookableSlot('07:00')] }) });
+    await runCheck(env, { now: NOW, fetchOpts });
+    expect(sent).toHaveLength(1);
+  });
+
+  it('records an anonymous status for the sign-up page', async () => {
+    await addSubscriber('a@example.com', ['Monday', 'Tuesday'], ['07:00']);
+    stubFetch({ bookingHandler: () => ({ data: [bookableSlot('07:00'), bookableSlot('08:00')] }) });
+    await runCheck(env, { now: NOW, fetchOpts });
+    expect(JSON.parse(await env.PREFERENCES.get('status:last'))).toEqual({
+      checkedAt: NOW.toISOString(),
+      openSlots: 4,
+      datesChecked: 2,
+    });
   });
 });

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>🎾 Manage Thy Alerts</title>
+    <title>🎾 Thy Settings</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -16,23 +16,66 @@
     <main class="scroll">
       <header class="header">
         <div class="crest" aria-hidden="true">🎾</div>
-        <h1>Manage Thy Alerts</h1>
-        <p class="subtitle">Change thy hours or lay down thy racket</p>
+        <h1>Thy Settings</h1>
+        <p class="subtitle" id="who">Consulting the ledger...</p>
       </header>
 
-      <div id="statusMessage" class="status show pending" role="status" aria-live="polite">
-        Consulting the ledger...
+      <div id="statusMessage" class="status" role="status" aria-live="polite"></div>
+
+      <div id="prompt" class="prompt" hidden>
+        <p id="promptText"></p>
+        <button type="button" class="btn" id="promptBtn"></button>
       </div>
-      <dl id="summary" class="summary" hidden></dl>
-      <div id="actions" class="actions" hidden>
-        <p class="hint">
-          To change thy days or hours, fill in the <a href="/">sign-up scroll</a> again with the
-          same address. The new choices replace the old once confirmed.
-        </p>
-        <button type="button" class="btn btn--danger" id="stopBtn">
-          <span class="btn-label">Stop all alerts</span>
-        </button>
-      </div>
+
+      <section id="settings" hidden>
+        <div class="panel">
+          <div class="setting-row">
+            <div>
+              <div class="setting-title" id="alertsLabel">Court alerts</div>
+              <div class="setting-sub" id="stateText"></div>
+            </div>
+            <button
+              type="button"
+              class="switch"
+              id="toggle"
+              role="switch"
+              aria-checked="true"
+              aria-labelledby="alertsLabel"
+            ></button>
+          </div>
+          <button type="button" class="link-btn" id="snoozeBtn">Pause for a week</button>
+        </div>
+
+        <form id="prefsForm" class="manage-form" novalidate>
+          <section class="field">
+            <div class="field-head">
+              <p class="field-label" id="daysLabel">Days of the Week</p>
+              <button type="button" class="select-all" data-group="day">All / None</button>
+            </div>
+            <div id="dayChips" class="chips" role="group" aria-labelledby="daysLabel"></div>
+          </section>
+
+          <section class="field">
+            <div class="field-head">
+              <p class="field-label" id="timesLabel">Hours of Play</p>
+              <button type="button" class="select-all" data-group="time">All / None</button>
+            </div>
+            <div id="timeChips" role="group" aria-labelledby="timesLabel"></div>
+          </section>
+
+          <button type="submit" class="btn" id="saveBtn" disabled>
+            <span class="btn-label">Save changes</span>
+          </button>
+        </form>
+
+        <details class="danger">
+          <summary>Delete my details</summary>
+          <p>This removes thy address and choices for good. Thou canst always sign up again.</p>
+          <button type="button" class="btn btn--danger" id="deleteBtn">
+            <span class="btn-label">Delete everything</span>
+          </button>
+        </details>
+      </section>
 
       <footer class="footer"><a href="/">Back to the sign-up scroll</a></footer>
     </main>

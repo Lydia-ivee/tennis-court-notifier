@@ -28,3 +28,11 @@ export function updateSeen(seenIds, sentMatches, today) {
   const added = sentMatches.map((m) => slotId(m.date, m.start));
   return [...new Set([...kept, ...added])];
 }
+
+// Paused with no end date means off until turned back on. A pause with an end
+// date lapses by itself, so nobody has to remember to resume.
+export function isPaused(subscriber, now = new Date()) {
+  if (!subscriber.paused) return false;
+  if (!subscriber.pausedUntil) return true;
+  return new Date(subscriber.pausedUntil) > now;
+}

@@ -18,7 +18,14 @@
         <div class="crest" aria-hidden="true">🎾</div>
         <h1>The Tennis Court Quest</h1>
         <p class="subtitle">Sound the horn when the royal courts fall free</p>
+        <p id="lastChecked" class="last-checked" hidden></p>
       </header>
+
+      <ol class="steps" aria-label="How it works">
+        <li><span>1</span>Pick thy days and hours</li>
+        <li><span>2</span>Confirm from thy inbox</li>
+        <li><span>3</span>Hear of open courts</li>
+      </ol>
 
       <form id="preferencesForm" class="form" novalidate>
         <section class="field">
@@ -34,91 +41,35 @@
         </section>
 
         <section class="field">
-          <div class="field-head">
-            <label>Days of the Week</label>
-            <button type="button" class="select-all" data-group="day">All / None</button>
-          </div>
-          <div class="chips" role="group" aria-label="Days of the week">
-            <label class="chip"
-              ><input type="checkbox" name="day" value="Monday" /><span>Mon</span></label
-            >
-            <label class="chip"
-              ><input type="checkbox" name="day" value="Tuesday" /><span>Tue</span></label
-            >
-            <label class="chip"
-              ><input type="checkbox" name="day" value="Wednesday" /><span>Wed</span></label
-            >
-            <label class="chip"
-              ><input type="checkbox" name="day" value="Thursday" /><span>Thu</span></label
-            >
-            <label class="chip"
-              ><input type="checkbox" name="day" value="Friday" /><span>Fri</span></label
-            >
-            <label class="chip"
-              ><input type="checkbox" name="day" value="Saturday" /><span>Sat</span></label
-            >
-            <label class="chip"
-              ><input type="checkbox" name="day" value="Sunday" /><span>Sun</span></label
-            >
+          <p class="field-label">Quick picks</p>
+          <div class="presets" role="group" aria-label="Quick picks">
+            <button type="button" class="preset" data-preset="weekday-evenings">
+              Weekday evenings
+            </button>
+            <button type="button" class="preset" data-preset="weekend-mornings">
+              Weekend mornings
+            </button>
+            <button type="button" class="preset" data-preset="any">Any time</button>
           </div>
         </section>
 
         <section class="field">
           <div class="field-head">
-            <label>Hours of Play</label>
+            <p class="field-label" id="daysLabel">Days of the Week</p>
+            <button type="button" class="select-all" data-group="day">All / None</button>
+          </div>
+          <div id="dayChips" class="chips" role="group" aria-labelledby="daysLabel"></div>
+        </section>
+
+        <section class="field">
+          <div class="field-head">
+            <p class="field-label" id="timesLabel">Hours of Play</p>
             <button type="button" class="select-all" data-group="time">All / None</button>
           </div>
-          <div class="chips chips--time" role="group" aria-label="Hours of play">
-            <label class="chip"
-              ><input type="checkbox" name="time" value="07:00" /><span>7am</span></label
-            >
-            <label class="chip"
-              ><input type="checkbox" name="time" value="08:00" /><span>8am</span></label
-            >
-            <label class="chip"
-              ><input type="checkbox" name="time" value="09:00" /><span>9am</span></label
-            >
-            <label class="chip"
-              ><input type="checkbox" name="time" value="10:00" /><span>10am</span></label
-            >
-            <label class="chip"
-              ><input type="checkbox" name="time" value="11:00" /><span>11am</span></label
-            >
-            <label class="chip"
-              ><input type="checkbox" name="time" value="12:00" /><span>12pm</span></label
-            >
-            <label class="chip"
-              ><input type="checkbox" name="time" value="13:00" /><span>1pm</span></label
-            >
-            <label class="chip"
-              ><input type="checkbox" name="time" value="14:00" /><span>2pm</span></label
-            >
-            <label class="chip"
-              ><input type="checkbox" name="time" value="15:00" /><span>3pm</span></label
-            >
-            <label class="chip"
-              ><input type="checkbox" name="time" value="16:00" /><span>4pm</span></label
-            >
-            <label class="chip"
-              ><input type="checkbox" name="time" value="17:00" /><span>5pm</span></label
-            >
-            <label class="chip"
-              ><input type="checkbox" name="time" value="18:00" /><span>6pm</span></label
-            >
-            <label class="chip"
-              ><input type="checkbox" name="time" value="19:00" /><span>7pm</span></label
-            >
-            <label class="chip"
-              ><input type="checkbox" name="time" value="20:00" /><span>8pm</span></label
-            >
-            <label class="chip"
-              ><input type="checkbox" name="time" value="21:00" /><span>9pm</span></label
-            >
-            <label class="chip"
-              ><input type="checkbox" name="time" value="22:00" /><span>10pm</span></label
-            >
-          </div>
+          <div id="timeChips" role="group" aria-labelledby="timesLabel"></div>
         </section>
+
+        <p id="choiceSummary" class="choice-summary" aria-live="polite">Nothing chosen yet</p>
 
         <button type="submit" class="btn" id="submitBtn">
           <span class="btn-label">Start Quest</span>
@@ -128,9 +79,12 @@
         <div id="statusMessage" class="status" role="status" aria-live="polite"></div>
       </form>
 
-      <footer class="footer">Forged for those who await an open court.</footer>
+      <footer class="footer">
+        Already questing? Every alert email has a <em>Settings</em> link to pause or change thy
+        alerts.
+      </footer>
     </main>
 
-    <script src="script.js"></script>
+    <script type="module" src="script.js"></script>
   </body>
 </html>

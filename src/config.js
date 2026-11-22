@@ -36,6 +36,8 @@ export const LIMITS = {
   confirmTokenTtlSeconds: 24 * 60 * 60,
   // Minimum gap between confirmation emails to the same address.
   confirmCooldownSeconds: 10 * 60,
+  // Longest snooze the settings page can set.
+  maxPauseDays: 30,
   // How long we remember that a slot was already emailed to someone.
   seenTtlSeconds: (HORIZON_DAYS + 1) * 24 * 60 * 60,
 };
@@ -52,6 +54,8 @@ export const keys = {
   seen: (email) => `seen:${normaliseEmail(email)}`,
   cooldown: (email) => `cooldown:${normaliseEmail(email)}`,
   subscriberPrefix: 'pref:',
+  // Outside the pref: prefix so it is never mistaken for a subscriber.
+  status: 'status:last',
 };
 
 export function normaliseEmail(email) {
