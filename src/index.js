@@ -85,9 +85,7 @@ const BOOKING = {
   activity: 'highbury-tennis',
 };
 
-const WEEKDAYS = [
-  'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
-];
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 // Dates for today through the next `days - 1` days, each tagged with its weekday.
 function upcomingDates(days) {
