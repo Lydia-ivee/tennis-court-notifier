@@ -134,6 +134,10 @@ See [SECURITY.md](SECURITY.md) for how subscribers are protected and how to repo
 - It checks every 30 minutes, so a slot can open and go between checks. Push alerts cut the delay after a check to seconds.
 - Be kind to the booking site: dates are fetched one at a time and only when someone wants them.
 
+## How this was built
+
+I designed the spec and wrote the product requirements, then used Claude Code, Anthropic's coding assistant, to help write the code and the automated tests. I then ran QA and made tweaks wherever it wasn't behaving as expected. That's why some commits end with `Co-Authored-By: Claude`.
+
 ## Licence
 
 [MIT](LICENSE)
