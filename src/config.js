@@ -7,6 +7,9 @@ export const BOOKING = {
   bookingPage: 'https://bookings.better.org.uk/location/islington-tennis-centre/highbury-tennis',
 };
 
+// The courts are in London, so "today" means today in London, not in UTC.
+export const TIME_ZONE = 'Europe/London';
+
 // How many days ahead to look, including today.
 export const HORIZON_DAYS = 7;
 
@@ -33,11 +36,20 @@ export const LIMITS = {
   confirmTokenTtlSeconds: 24 * 60 * 60,
   // Minimum gap between confirmation emails to the same address.
   confirmCooldownSeconds: 10 * 60,
+  // How long we remember that a slot was already emailed to someone.
+  seenTtlSeconds: (HORIZON_DAYS + 1) * 24 * 60 * 60,
+};
+
+export const FETCH = {
+  timeoutMs: 10_000,
+  retries: 3,
+  baseDelayMs: 500,
 };
 
 // KV key layout. Emails are lower-cased so lookups are case-insensitive.
 export const keys = {
   subscriber: (email) => `pref:${normaliseEmail(email)}`,
+  seen: (email) => `seen:${normaliseEmail(email)}`,
   cooldown: (email) => `cooldown:${normaliseEmail(email)}`,
   subscriberPrefix: 'pref:',
 };
