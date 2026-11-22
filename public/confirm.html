@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🎾 Confirm Thy Quest</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:ital@0;1&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="scroll">
+      <header class="header">
+        <div class="crest" aria-hidden="true">🎾</div>
+        <h1>Confirm Thy Quest</h1>
+        <p class="subtitle">The final seal upon thy request</p>
+      </header>
+
+      <div id="statusMessage" class="status" role="status" aria-live="polite"></div>
+      <dl id="summary" class="summary" hidden></dl>
+      <a id="manageLink" class="btn" href="/manage" hidden>Manage thy alerts</a>
+
+      <footer class="footer"><a href="/">Back to the sign-up scroll</a></footer>
+    </main>
+
+    <script type="module" src="confirm.js"></script>
+  </body>
+</html>

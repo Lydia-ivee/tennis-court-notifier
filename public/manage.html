@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🎾 Manage Thy Alerts</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=EB+Garamond:ital@0;1&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="scroll">
+      <header class="header">
+        <div class="crest" aria-hidden="true">🎾</div>
+        <h1>Manage Thy Alerts</h1>
+        <p class="subtitle">Change thy hours or lay down thy racket</p>
+      </header>
+
+      <div id="statusMessage" class="status show pending" role="status" aria-live="polite">
+        Consulting the ledger...
+      </div>
+      <dl id="summary" class="summary" hidden></dl>
+      <div id="actions" class="actions" hidden>
+        <p class="hint">
+          To change thy days or hours, fill in the <a href="/">sign-up scroll</a> again with the
+          same address. The new choices replace the old once confirmed.
+        </p>
+        <button type="button" class="btn btn--danger" id="stopBtn">
+          <span class="btn-label">Stop all alerts</span>
+        </button>
+      </div>
+
+      <footer class="footer"><a href="/">Back to the sign-up scroll</a></footer>
+    </main>
+
+    <script type="module" src="manage.js"></script>
+  </body>
+</html>

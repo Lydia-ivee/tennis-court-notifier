@@ -302,6 +302,54 @@ input[type='email']:focus {
   border: 1.5px solid var(--gold);
 }
 
+/* ---- Confirm and manage pages ---- */
+[hidden] {
+  display: none !important;
+}
+
+a.btn {
+  text-decoration: none;
+  margin-top: 1.25rem;
+}
+
+.btn--danger {
+  background: var(--crimson);
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.5rem 1rem;
+  margin: 1.25rem 0 0;
+  padding: 1rem 1.1rem;
+  border: 1.5px solid var(--parchment-line);
+  border-radius: 4px;
+  background-color: rgba(255, 255, 255, 0.35);
+}
+.summary dt {
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  color: var(--gold-deep);
+}
+.summary dd {
+  margin: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  margin-top: 1.25rem;
+}
+.hint {
+  font-style: italic;
+  color: #6b5d3d;
+  margin: 0 0 1rem;
+}
+.hint a,
+.footer a {
+  color: var(--moss);
+}
+
 /* ---- Footer ---- */
 .footer {
   margin-top: 1.75rem;

@@ -4,8 +4,7 @@ const submitBtn = document.getElementById('submitBtn');
 const btnLabel = submitBtn.querySelector('.btn-label');
 const status = document.getElementById('statusMessage');
 
-// Where the worker receives preferences. Adjust if your route differs.
-const API_ENDPOINT = '/api/preferences';
+const API_ENDPOINT = '/api/subscriptions';
 
 function showStatus(message, type) {
   status.textContent = message;
@@ -23,8 +22,7 @@ function checkedValues(name) {
 // "All / None" toggles per group
 document.querySelectorAll('.select-all').forEach((btn) => {
   btn.addEventListener('click', () => {
-    const group = btn.dataset.group;
-    const boxes = [...form.querySelectorAll(`input[name="${group}"]`)];
+    const boxes = [...form.querySelectorAll(`input[name="${btn.dataset.group}"]`)];
     const turnOn = boxes.some((b) => !b.checked);
     boxes.forEach((b) => {
       b.checked = turnOn;
@@ -39,7 +37,7 @@ form.addEventListener('submit', async (event) => {
   const days = checkedValues('day');
   const times = checkedValues('time');
 
-  // Validation with medieval flavour
+  // Friendly checks first. The server validates everything again.
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     showStatus('A herald needs a valid address to reach thee.', 'error');
     emailInput.focus();
@@ -54,8 +52,6 @@ form.addEventListener('submit', async (event) => {
     return;
   }
 
-  const payload = { email, days, times, createdAt: new Date().toISOString() };
-
   submitBtn.disabled = true;
   btnLabel.textContent = 'Dispatching raven...';
   showStatus('Thy request rides to the castle...', 'pending');
@@ -64,20 +60,20 @@ form.addEventListener('submit', async (event) => {
     const response = await fetch(API_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ email, days, times }),
     });
-
+    const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(`The castle answered with ${response.status}`);
+      throw new Error(data.error || `The castle answered with ${response.status}.`);
     }
 
-    showStatus(`Quest begun! We shall summon thee at ${email} when a court falls free.`, 'success');
+    showStatus(
+      `A raven flies to ${email}. Open the letter and confirm to begin thy quest.`,
+      'success',
+    );
     form.reset();
   } catch (err) {
-    showStatus(
-      `Alas, thy request could not reach the castle. ${err.message}. Pray, try again.`,
-      'error',
-    );
+    showStatus(`Alas, thy request could not reach the castle. ${err.message}`, 'error');
   } finally {
     submitBtn.disabled = false;
     btnLabel.textContent = 'Start Quest';
