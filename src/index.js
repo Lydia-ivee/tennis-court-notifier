@@ -35,11 +35,11 @@ const routes = {
 
 const knownPaths = new Set(Object.keys(routes).map((r) => r.split(' ')[1]));
 
-export async function handleRequest(request, env) {
+export async function handleRequest(request, env, ctx) {
   const { pathname } = new URL(request.url);
   try {
     const handler = routes[`${request.method} ${pathname}`];
-    if (handler) return await handler(request, env);
+    if (handler) return await handler(request, env, ctx);
     if (knownPaths.has(pathname)) throw new HttpError(405, 'Method not allowed.');
     if (pathname.startsWith('/api/')) throw new HttpError(404, 'Not found.');
     return env.ASSETS.fetch(request);

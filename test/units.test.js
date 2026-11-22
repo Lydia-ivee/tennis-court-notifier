@@ -3,7 +3,7 @@ import { fetchWithRetry, parseSlots, upcomingDates } from '../src/availability.j
 import { buildAlertEmail, escapeHtml } from '../src/email.js';
 import { maskEmail } from '../src/http.js';
 import { deviceLabel, upsertDevice, withoutDevices } from '../src/devices.js';
-import { buildPushPayload } from '../src/notifications.js';
+import { buildPushPayload, buildTestPayload } from '../src/notifications.js';
 import { generateCode } from '../src/linking.js';
 import { findMatches, isPaused, unseen, updateSeen } from '../src/matching.js';
 import { confirmToken, manageToken, signToken, verifyToken } from '../src/tokens.js';
@@ -326,7 +326,18 @@ describe('devices', () => {
 });
 
 describe('generateCode', () => {
-  it('always gives six digits', () => {
-    for (let i = 0; i < 500; i++) expect(generateCode()).toMatch(/^\d{6}$/);
+  it('always gives eight digits', () => {
+    for (let i = 0; i < 500; i++) expect(generateCode()).toMatch(/^\d{8}$/);
+  });
+});
+
+describe('buildTestPayload', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("links to today's booking page in London, not UTC", () => {
+    vi.useFakeTimers();
+    // 23:30 UTC on 14 June is 00:30 on 15 June in London.
+    vi.setSystemTime(new Date('2026-06-14T23:30:00Z'));
+    expect(buildTestPayload().url).toMatch(/2026-06-15\/by-time$/);
   });
 });

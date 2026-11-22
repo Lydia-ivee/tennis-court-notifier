@@ -181,21 +181,48 @@ describe('runCheck', () => {
       expect(await env.PREFERENCES.get('seen:a@example.com')).not.toBeNull();
     });
 
-    it('prunes devices that have gone and turns email back on if none are left', async () => {
+    it('prunes devices that have gone, emails instead, and turns email back on', async () => {
       await addSubscriber('a@example.com', ['Monday'], ['18:00'], {
         emailAlerts: false,
         push: [asDevice(phone, 'iPhone')],
       });
-      stubFetch({
+      const { sent } = stubFetch({
         bookingHandler: () => ({ data: [bookableSlot('18:00')] }),
         pushStatus: () => 410,
       });
       const summary = await runCheck(env, { now: NOW, fetchOpts });
-      expect(summary).toMatchObject({ devicesRemoved: 1, errors: 1 });
+      expect(summary).toMatchObject({ devicesRemoved: 1, emailsSent: 1, errors: 0 });
+      expect(sent).toHaveLength(1);
       const record = JSON.parse(await env.PREFERENCES.get('pref:a@example.com'));
       expect(record).toMatchObject({ push: [], emailAlerts: true });
-      // Nothing reached them, so the slot is not marked as seen.
-      expect(await env.PREFERENCES.get('seen:a@example.com')).toBeNull();
+    });
+
+    it('falls back to email when email is off but no push gets through', async () => {
+      await addSubscriber('a@example.com', ['Monday'], ['18:00'], {
+        emailAlerts: false,
+        push: [asDevice(phone, 'iPhone')],
+      });
+      const { sent } = stubFetch({
+        bookingHandler: () => ({ data: [bookableSlot('18:00')] }),
+        pushStatus: () => 403,
+      });
+      const summary = await runCheck(env, { now: NOW, fetchOpts });
+      expect(summary).toMatchObject({ emailsSent: 1, pushesSent: 0, errors: 0 });
+      expect(sent).toHaveLength(1);
+      // A 403 is not proof the device is gone, so it is kept.
+      const record = JSON.parse(await env.PREFERENCES.get('pref:a@example.com'));
+      expect(record.push).toHaveLength(1);
+    });
+
+    it('falls back to email when email is off and push is not configured', async () => {
+      delete env.VAPID_PRIVATE_KEY;
+      await addSubscriber('a@example.com', ['Monday'], ['18:00'], {
+        emailAlerts: false,
+        push: [asDevice(phone, 'iPhone')],
+      });
+      const { sent } = stubFetch({ bookingHandler: () => ({ data: [bookableSlot('18:00')] }) });
+      await runCheck(env, { now: NOW, fetchOpts });
+      expect(sent).toHaveLength(1);
     });
 
     it('counts a push alone as delivered when email fails', async () => {

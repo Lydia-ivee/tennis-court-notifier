@@ -128,7 +128,7 @@ export function buildLinkCodeEmail(code) {
     heading: 'Thy Linking Code',
     subheading: 'To link the Court Quest app on thy device',
     body: `<p style="margin:0;${FONT}color:#2c2415;text-align:center;">Type this code into the app:</p>
-      <p style="margin:16px 0 0;${FONT}font-size:34px;letter-spacing:8px;font-weight:bold;color:#2c2415;text-align:center;">${escapeHtml(code)}</p>`,
+      <p style="margin:16px 0 0;${FONT}font-size:34px;letter-spacing:6px;font-weight:bold;color:#2c2415;text-align:center;">${escapeHtml(code)}</p>`,
     footer:
       'It expires in 10 minutes. If thou didst not ask for it, ignore this email: nothing changes without the code.',
   });

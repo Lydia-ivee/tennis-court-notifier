@@ -12,13 +12,12 @@ import { sendPush, vapidFromEnv } from './webpush.js';
 // Returns what happened so the caller can count it.
 async function deliver(env, sub, fresh, vapid) {
   const outcome = { email: false, pushes: 0, gone: [] };
-
-  if (sub.emailAlerts !== false) {
+  const sendAlertEmail = async () => {
     const { manageUrl, unsubscribeUrl } = await manageLinks(env, sub.email);
-    outcome.email = await sendEmail(env, sub.email, buildAlertEmail(sub.email, fresh, manageUrl), {
+    return sendEmail(env, sub.email, buildAlertEmail(sub.email, fresh, manageUrl), {
       unsubscribeUrl,
     });
-  }
+  };
 
   const devices = vapid ? sub.push || [] : [];
   if (devices.length) {
@@ -29,8 +28,18 @@ async function deliver(env, sub, fresh, vapid) {
     results.forEach((r, i) => {
       if (r.ok) outcome.pushes++;
       else if (r.gone) outcome.gone.push(devices[i].endpoint);
+      // Not pruned on other errors: a 403 after a key change or a server
+      // misconfiguration would otherwise wipe every device at once. The email
+      // fallback below keeps alerts flowing, and the browser re-subscribes when
+      // its key no longer matches (public/push.js).
       else log('push_failed', { to: maskEmail(sub.email), status: r.status });
     });
+  }
+
+  // Email if they want it, and also if they turned it off but no push got
+  // through: someone with email off must never be left hearing nothing.
+  if (sub.emailAlerts !== false || outcome.pushes === 0) {
+    outcome.email = await sendAlertEmail();
   }
   return outcome;
 }

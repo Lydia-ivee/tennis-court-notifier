@@ -20,12 +20,14 @@ export const PUSH = {
   maxEndpointLength: 2048,
 };
 
-// Six-digit codes that link an installed app to a subscription.
+// Emailed codes that link an installed app to a subscription.
 export const LINK_CODE = {
+  digits: 8,
   ttlSeconds: 10 * 60,
   maxAttempts: 5,
-  // Minimum gap between codes sent to the same inbox.
-  cooldownSeconds: 60,
+  // Minimum gap between codes sent to the same inbox: stops inbox flooding
+  // and caps how many codes an attacker can try to guess.
+  cooldownSeconds: 10 * 60,
 };
 
 // The courts are in London, so "today" means today in London, not in UTC.

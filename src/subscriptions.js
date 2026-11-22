@@ -58,11 +58,15 @@ async function saveRecord(env, record) {
   return next;
 }
 
-export async function enforceRateLimit(request, env) {
+// Apply the rate limit binding to any key. No binding (local dev, tests) means no limit.
+export async function rateLimit(env, key, message = 'Too many requests. Try again in a minute.') {
   if (!env.SUBSCRIBE_LIMITER) return;
-  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  const { success } = await env.SUBSCRIBE_LIMITER.limit({ key: ip });
-  if (!success) throw new HttpError(429, 'Too many requests. Try again in a minute.');
+  const { success } = await env.SUBSCRIBE_LIMITER.limit({ key });
+  if (!success) throw new HttpError(429, message);
+}
+
+export async function enforceRateLimit(request, env) {
+  await rateLimit(env, request.headers.get('CF-Connecting-IP') || 'unknown');
 }
 
 async function requireManageToken(request, env, token = bearerToken(request)) {
@@ -241,9 +245,17 @@ export async function deleteSubscription(request, env) {
 }
 
 // POST /api/unsubscribe?token=...  RFC 8058 one-click unsubscribe from mail clients.
+// It comes from the email, so it stops email. Someone who also has push
+// devices keeps those; with no devices left, the whole record goes.
 export async function oneClickUnsubscribe(request, env) {
   const token = new URL(request.url).searchParams.get('token');
   const email = await requireManageToken(request, env, token);
+  const stored = await env.PREFERENCES.get(keys.subscriber(email));
+  if (stored && (JSON.parse(stored).push || []).length) {
+    await saveRecord(env, { ...JSON.parse(stored), emailAlerts: false });
+    log('email_unsubscribed', { to: maskEmail(email) });
+    return json({ message: 'Emails stopped. Phone alerts carry on.' });
+  }
   await removeSubscriber(env, email);
   return json({ message: 'Alerts stopped.' });
 }

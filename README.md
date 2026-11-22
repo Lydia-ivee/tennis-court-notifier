@@ -37,7 +37,7 @@ The site is an installable web app (PWA) with Web Push, implemented from scratch
 - **VAPID (RFC 8292):** every request carries a short-lived ES256 JWT proving it came from this server. The subject is the site's URL, so no personal email address is sent anywhere.
 - **Safe by construction:** the Worker only POSTs to an allowlist of real push services (Google, Mozilla, Apple, Microsoft), so a forged subscription cannot point it at internal URLs. The service worker only ever opens the booking site, whatever a payload says.
 - **Self-cleaning:** when a push service reports a device as gone (404 or 410), the device is removed. If that leaves someone with no way to hear, email switches back on.
-- **iPhone and iPad:** Safari only allows push from a home-screen app, which cannot see Safari's storage. The installed app opens at Settings and links itself with a six-digit emailed code (hashed at rest, five guesses, ten-minute expiry, rate limited).
+- **iPhone and iPad:** Safari only allows push from a home-screen app, which cannot see Safari's storage. The installed app opens at Settings and links itself with an eight-digit emailed code (hashed at rest, ten-minute expiry, one per inbox per ten minutes, guesses rate limited per address).
 
 ## Project layout
 
@@ -45,7 +45,7 @@ The site is an installable web app (PWA) with Web Push, implemented from scratch
 src/
   index.js          router and cron entry point
   subscriptions.js  sign-up, confirm, settings, push device and unsubscribe handlers
-  linking.js        six-digit codes that link an installed app to a subscription
+  linking.js        emailed codes that link an installed app to a subscription
   check.js          the scheduled availability check and delivery
   availability.js   London-time dates, booking API client with retry and backoff
   matching.js       pure matching, de-duplication and pause logic
@@ -64,21 +64,21 @@ test/               Vitest suites with an in-memory KV, stubbed fetch and real p
 
 ## API
 
-| Method   | Path                          | Auth                  | Purpose                                 |
-| -------- | ----------------------------- | --------------------- | --------------------------------------- |
-| `POST`   | `/api/subscriptions`          | none (rate limited)   | Request alerts, sends a confirm link    |
-| `POST`   | `/api/subscriptions/confirm`  | confirm token in body | Activate or replace a subscription      |
-| `GET`    | `/api/subscription`           | `Bearer` manage token | Read your preferences                   |
-| `PATCH`  | `/api/subscription`           | `Bearer` manage token | Change days, times, pause, email on/off |
-| `DELETE` | `/api/subscription`           | `Bearer` manage token | Delete everything                       |
-| `POST`   | `/api/subscription/push`      | `Bearer` manage token | Register this device for push           |
-| `DELETE` | `/api/subscription/push`      | `Bearer` manage token | Remove a device by id                   |
-| `POST`   | `/api/subscription/push/test` | `Bearer` manage token | Send a test notification                |
-| `GET`    | `/api/push/key`               | none                  | VAPID public key for subscribing        |
-| `POST`   | `/api/link/request`           | none (rate limited)   | Email a six-digit code to link a device |
-| `POST`   | `/api/link/verify`            | none (rate limited)   | Exchange the code for a manage token    |
-| `POST`   | `/api/unsubscribe?token=...`  | manage token in query | One-click unsubscribe from mail apps    |
-| `GET`    | `/api/status`                 | none                  | When the courts were last checked       |
+| Method   | Path                          | Auth                  | Purpose                                    |
+| -------- | ----------------------------- | --------------------- | ------------------------------------------ |
+| `POST`   | `/api/subscriptions`          | none (rate limited)   | Request alerts, sends a confirm link       |
+| `POST`   | `/api/subscriptions/confirm`  | confirm token in body | Activate or replace a subscription         |
+| `GET`    | `/api/subscription`           | `Bearer` manage token | Read your preferences                      |
+| `PATCH`  | `/api/subscription`           | `Bearer` manage token | Change days, times, pause, email on/off    |
+| `DELETE` | `/api/subscription`           | `Bearer` manage token | Delete everything                          |
+| `POST`   | `/api/subscription/push`      | `Bearer` manage token | Register this device for push              |
+| `DELETE` | `/api/subscription/push`      | `Bearer` manage token | Remove a device by id                      |
+| `POST`   | `/api/subscription/push/test` | `Bearer` manage token | Send a test notification                   |
+| `GET`    | `/api/push/key`               | none                  | VAPID public key for subscribing           |
+| `POST`   | `/api/link/request`           | none (rate limited)   | Email an eight-digit code to link a device |
+| `POST`   | `/api/link/verify`            | none (rate limited)   | Exchange the code for a manage token       |
+| `POST`   | `/api/unsubscribe?token=...`  | manage token in query | One-click unsubscribe from mail apps       |
+| `GET`    | `/api/status`                 | none                  | When the courts were last checked          |
 
 `PATCH` takes any of `days`, `times`, `paused` (true or false), `pauseDays` (1 to 30, with `paused: true`) and `emailAlerts` (false only while a push device is registered).
 

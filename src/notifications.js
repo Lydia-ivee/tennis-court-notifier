@@ -1,5 +1,6 @@
 // What a push notification says. Kept short: lock screens show about two lines.
 
+import { upcomingDates } from './availability.js';
 import { bookingUrlFor } from './config.js';
 
 const SHORT_DAY = {
@@ -60,7 +61,8 @@ export function buildTestPayload() {
   return {
     title: 'Test alert: the heralds can reach thee',
     body: 'This is how open courts will look. Tap to see the booking page.',
-    url: bookingUrlFor(new Date().toISOString().slice(0, 10)),
+    // Today in London, not UTC, so a late-night test never opens yesterday.
+    url: bookingUrlFor(upcomingDates(1)[0].date),
     tag: 'court-alert-test',
   };
 }

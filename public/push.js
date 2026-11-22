@@ -40,6 +40,12 @@ function keyBytes(base64url) {
   return Uint8Array.from(raw, (c) => c.charCodeAt(0));
 }
 
+function sameKey(buffer, bytes) {
+  if (!buffer) return false;
+  const a = new Uint8Array(buffer);
+  return a.length === bytes.length && a.every((b, i) => b === bytes[i]);
+}
+
 async function registration() {
   await navigator.serviceWorker.register('/sw.js', { scope: '/' });
   return navigator.serviceWorker.ready;
@@ -59,13 +65,20 @@ export async function enablePush(token) {
     throw new Error('Notifications were not allowed. Check thy browser settings for this site.');
   }
   const { publicKey } = await api('/api/push/key');
+  const serverKey = keyBytes(publicKey);
   const reg = await registration();
-  const subscription =
-    (await reg.pushManager.getSubscription()) ||
-    (await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: keyBytes(publicKey),
-    }));
+
+  // A subscription made under an old server key is rejected by push services
+  // for ever, so replace it rather than reuse it.
+  let subscription = await reg.pushManager.getSubscription();
+  if (subscription && !sameKey(subscription.options?.applicationServerKey, serverKey)) {
+    await subscription.unsubscribe();
+    subscription = null;
+  }
+  subscription ||= await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: serverKey,
+  });
   return api('/api/subscription/push', {
     method: 'POST',
     token,

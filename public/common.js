@@ -109,11 +109,10 @@ export function describeChoice(days, times) {
 }
 
 // Tokens arrive in the URL fragment (#token=...&action=...) so they never
-// reach the server logs. By default they are then stripped from the address
-// bar; the settings page keeps them (see manage.js for why).
-export function takeHashParams({ strip = true } = {}) {
+// reach the server logs. Read them, then strip them from the address bar.
+export function takeHashParams() {
   const params = new URLSearchParams(window.location.hash.slice(1));
-  if (params.get('token') && strip) history.replaceState(null, '', window.location.pathname);
+  if (params.get('token')) history.replaceState(null, '', window.location.pathname);
   return params;
 }
 

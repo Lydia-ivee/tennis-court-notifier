@@ -1,25 +1,30 @@
 // Link a device (usually an installed home-screen app) to a subscription with
-// a six-digit emailed code. A code, not a link: links in email open in the
+// an eight-digit emailed code. A code, not a link: links in email open in the
 // browser, while an installed app on iPhone has its own separate storage.
 //
-// Brute force: 10^6 codes, 5 guesses per code, at most one code per inbox per
-// minute plus the per-IP rate limit, and codes expire after 10 minutes.
+// Guessing: 10^8 codes, one code per inbox per 10 minutes, and a rate limit
+// on guesses keyed by the email address, so spreading guesses across many IPs
+// does not help. The per-code attempt counter in KV is a second line only:
+// KV has no atomic increment, so parallel guesses can all read the same count.
+// The rate limiter is the real bound (about 50 guesses per code at most).
 
 import { LIMITS, LINK_CODE, keys } from './config.js';
 import { buildLinkCodeEmail, sendEmail } from './email.js';
 import { encoder } from './encoding.js';
 import { HttpError, json, log, maskEmail, readJson } from './http.js';
-import { enforceRateLimit } from './subscriptions.js';
+import { enforceRateLimit, rateLimit } from './subscriptions.js';
 import { manageToken } from './tokens.js';
 import { isValidEmail } from './validation.js';
 
-// Uniform six-digit code (rejection sampling avoids modulo bias).
+const CODE_SPACE = 10 ** LINK_CODE.digits;
+
+// Uniform code (rejection sampling avoids modulo bias).
 export function generateCode() {
   const buf = new Uint32Array(1);
-  const limit = Math.floor(0xffffffff / 1_000_000) * 1_000_000;
+  const limit = Math.floor(0x100000000 / CODE_SPACE) * CODE_SPACE;
   do crypto.getRandomValues(buf);
   while (buf[0] >= limit);
-  return String(buf[0] % 1_000_000).padStart(6, '0');
+  return String(buf[0] % CODE_SPACE).padStart(LINK_CODE.digits, '0');
 }
 
 async function hashCode(email, code) {
@@ -42,24 +47,10 @@ function parseEmail(body) {
 
 const SAME_ANSWER = { message: 'If that address has alerts, a code is on its way.' };
 
-// POST /api/link/request  { email }
-// Answers the same whether or not the address is subscribed, so it cannot be
-// used to find out who uses the service.
-export async function requestLinkCode(request, env) {
-  await enforceRateLimit(request, env);
-  const email = parseEmail(await readJson(request, LIMITS.maxBodyBytes));
-
-  if (await env.PREFERENCES.get(keys.linkCooldown(email))) {
-    throw new HttpError(429, 'A code went out a moment ago. Check thy inbox, or wait a minute.');
-  }
-  await env.PREFERENCES.put(keys.linkCooldown(email), '1', {
-    expirationTtl: LINK_CODE.cooldownSeconds,
-  });
-
-  if (!(await env.PREFERENCES.get(keys.subscriber(email)))) {
-    return json(SAME_ANSWER, 202);
-  }
-
+// Create and email a code. Runs after the response, so subscribed and
+// unsubscribed addresses get the same answer in the same time.
+async function issueCode(env, email) {
+  if (!(await env.PREFERENCES.get(keys.subscriber(email)))) return;
   const code = generateCode();
   await env.PREFERENCES.put(
     keys.linkCode(email),
@@ -70,14 +61,38 @@ export async function requestLinkCode(request, env) {
     }),
     { expirationTtl: LINK_CODE.ttlSeconds },
   );
-  const sent = await sendEmail(env, email, buildLinkCodeEmail(code));
-  if (!sent) {
-    // Let them retry straight away rather than waiting out the cooldown.
-    await env.PREFERENCES.delete(keys.linkCooldown(email));
-    await env.PREFERENCES.delete(keys.linkCode(email));
-    throw new HttpError(502, 'Could not send the code. Try again shortly.');
+  if (await sendEmail(env, email, buildLinkCodeEmail(code))) {
+    log('link_code_sent', { to: maskEmail(email) });
+    return;
   }
-  log('link_code_sent', { to: maskEmail(email) });
+  // Let them try again straight away rather than waiting out the cooldown.
+  await env.PREFERENCES.delete(keys.linkCooldown(email));
+  await env.PREFERENCES.delete(keys.linkCode(email));
+}
+
+// POST /api/link/request  { email }
+// Answers the same, immediately, whether or not the address is subscribed, so
+// it cannot be used to find out who uses the service.
+export async function requestLinkCode(request, env, ctx) {
+  await enforceRateLimit(request, env);
+  const email = parseEmail(await readJson(request, LIMITS.maxBodyBytes));
+
+  // Checked for every address, so it gives nothing away either.
+  if (await env.PREFERENCES.get(keys.linkCooldown(email))) {
+    throw new HttpError(
+      429,
+      'A code went out in the last 10 minutes. Check thy inbox, including spam.',
+    );
+  }
+  await env.PREFERENCES.put(keys.linkCooldown(email), '1', {
+    expirationTtl: LINK_CODE.cooldownSeconds,
+  });
+
+  const task = issueCode(env, email).catch((err) =>
+    log('link_code_failed', { to: maskEmail(email), message: err.message }),
+  );
+  if (ctx?.waitUntil) ctx.waitUntil(task);
+  else await task;
   return json(SAME_ANSWER, 202);
 }
 
@@ -86,8 +101,12 @@ export async function verifyLinkCode(request, env) {
   await enforceRateLimit(request, env);
   const body = await readJson(request, LIMITS.maxBodyBytes);
   const email = parseEmail(body);
+  // Keyed by address, not IP: this is what bounds guessing (see top of file).
+  await rateLimit(env, `link-verify:${email}`, 'Too many tries. Wait a minute and try again.');
   const code = typeof body.code === 'string' ? body.code.replace(/\s/g, '') : '';
-  if (!/^\d{6}$/.test(code)) throw new HttpError(400, 'The code is six digits.');
+  if (!new RegExp(`^\\d{${LINK_CODE.digits}}$`).test(code)) {
+    throw new HttpError(400, `The code is ${LINK_CODE.digits} digits.`);
+  }
 
   const wrong = new HttpError(400, 'That code is wrong or has expired.');
   const key = keys.linkCode(email);

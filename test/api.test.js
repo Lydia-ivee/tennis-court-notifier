@@ -173,6 +173,25 @@ describe('managing a subscription', () => {
     expect(gone.status).toBe(404);
   });
 
+  it('one-click unsubscribe stops email only when phone alerts are on', async () => {
+    const { body } = await subscribeAndConfirm();
+    const record = JSON.parse(await env.PREFERENCES.get('pref:ace@example.com'));
+    await env.PREFERENCES.put(
+      'pref:ace@example.com',
+      JSON.stringify({ ...record, push: [{ endpoint: 'https://fcm.googleapis.com/x' }] }),
+    );
+    const res = await handleRequest(
+      apiRequest(`/api/unsubscribe?token=${encodeURIComponent(body.manageToken)}`, {
+        method: 'POST',
+        body: 'List-Unsubscribe=One-Click',
+      }),
+      env,
+    );
+    expect((await res.json()).message).toBe('Emails stopped. Phone alerts carry on.');
+    const after = JSON.parse(await env.PREFERENCES.get('pref:ace@example.com'));
+    expect(after).toMatchObject({ emailAlerts: false, push: [expect.any(Object)] });
+  });
+
   it('supports RFC 8058 one-click unsubscribe', async () => {
     const { body } = await subscribeAndConfirm();
     const res = await handleRequest(
@@ -427,7 +446,7 @@ describe('linking a device with a code', () => {
   const verify = (email, code) =>
     handleRequest(apiRequest('/api/link/verify', { method: 'POST', body: { email, code } }), env);
   const codeFrom = (mail) =>
-    mail.content.find((c) => c.type === 'text/plain').value.match(/code is (\d{6})/)[1];
+    mail.content.find((c) => c.type === 'text/plain').value.match(/code is (\d{8})/)[1];
 
   it('emails a code that exchanges for a working manage token', async () => {
     await subscribeAndConfirm();
@@ -456,20 +475,48 @@ describe('linking a device with a code', () => {
     expect(sent).toHaveLength(0);
   });
 
-  it('limits codes to one a minute per inbox', async () => {
+  it('limits codes to one per inbox every 10 minutes', async () => {
     await subscribeAndConfirm();
     stubFetch();
     expect((await request('ace@example.com')).status).toBe(202);
     expect((await request('ace@example.com')).status).toBe(429);
   });
 
-  it('lets someone retry at once if the email could not be sent', async () => {
+  it('answers before the email is sent, the same as for unknown addresses', async () => {
+    await subscribeAndConfirm();
+    const { sent } = stubFetch();
+    const tasks = [];
+    const ctx = { waitUntil: (p) => tasks.push(p) };
+    const res = await handleRequest(
+      apiRequest('/api/link/request', { method: 'POST', body: { email: 'ace@example.com' } }),
+      env,
+      ctx,
+    );
+    expect(res.status).toBe(202);
+    expect(sent).toHaveLength(0);
+    await Promise.all(tasks);
+    expect(sent).toHaveLength(1);
+  });
+
+  it('still answers 202 if the email fails, and lets them retry at once', async () => {
     await subscribeAndConfirm();
     stubFetch({ sendgridStatus: 500 });
-    expect((await request('ace@example.com')).status).toBe(502);
-    expect(await env.PREFERENCES.get('linkcode:ace@example.com')).toBeNull();
-    stubFetch();
     expect((await request('ace@example.com')).status).toBe(202);
+    expect(await env.PREFERENCES.get('linkcode:ace@example.com')).toBeNull();
+    const { sent } = stubFetch();
+    expect((await request('ace@example.com')).status).toBe(202);
+    expect(sent).toHaveLength(1);
+  });
+
+  it('rate limits guesses per email address, not per IP', async () => {
+    env.SUBSCRIBE_LIMITER = {
+      limit: vi.fn(async ({ key }) => ({ success: !key.startsWith('link-verify:') })),
+    };
+    const res = await verify('ace@example.com', '12345678');
+    expect(res.status).toBe(429);
+    expect(env.SUBSCRIBE_LIMITER.limit).toHaveBeenCalledWith({
+      key: 'link-verify:ace@example.com',
+    });
   });
 
   it('accepts each code once', async () => {
@@ -486,7 +533,7 @@ describe('linking a device with a code', () => {
     const { sent } = stubFetch();
     await request('ace@example.com');
     const code = codeFrom(sent[0]);
-    const wrongCode = code === '000000' ? '111111' : '000000';
+    const wrongCode = code === '00000000' ? '11111111' : '00000000';
     for (let i = 0; i < 4; i++) {
       expect((await (await verify('ace@example.com', wrongCode)).json()).error).toBe(
         'That code is wrong or has expired.',
@@ -507,10 +554,13 @@ describe('linking a device with a code', () => {
     expect((await verify('ace@example.com', code)).status).toBe(400);
   });
 
-  it.each(['12345', 'abcdef', '1234567', undefined])('rejects malformed code %j', async (code) => {
-    const res = await verify('ace@example.com', code);
-    expect(res.status).toBe(400);
-  });
+  it.each(['123456', 'abcdefgh', '123456789', undefined])(
+    'rejects malformed code %j',
+    async (code) => {
+      const res = await verify('ace@example.com', code);
+      expect(res.status).toBe(400);
+    },
+  );
 
   it('never stores the code itself', async () => {
     await subscribeAndConfirm();
