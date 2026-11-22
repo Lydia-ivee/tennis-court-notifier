@@ -97,6 +97,7 @@ export async function getSubscription(request, env) {
 
 async function removeSubscriber(env, email) {
   await env.PREFERENCES.delete(keys.subscriber(email));
+  await env.PREFERENCES.delete(keys.seen(email));
   log('subscription_deleted', { to: maskEmail(email) });
 }
 

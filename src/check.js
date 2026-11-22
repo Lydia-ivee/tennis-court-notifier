@@ -1,8 +1,8 @@
-import { HORIZON_DAYS, keys } from './config.js';
+import { HORIZON_DAYS, LIMITS, keys } from './config.js';
 import { fetchSlots, upcomingDates } from './availability.js';
 import { buildAlertEmail, sendEmail } from './email.js';
 import { log, maskEmail } from './http.js';
-import { findMatches } from './matching.js';
+import { findMatches, unseen, updateSeen } from './matching.js';
 import { manageLinks } from './subscriptions.js';
 
 async function loadSubscribers(env) {
@@ -25,8 +25,8 @@ async function loadSubscribers(env) {
 }
 
 // The scheduled job: fetch availability once per wanted date, then email each
-// subscriber the slots that match their days and times.
-export async function runCheck(env, { now = new Date() } = {}) {
+// subscriber only about slots they have not already been told about.
+export async function runCheck(env, { now = new Date(), fetchOpts } = {}) {
   const subscribers = await loadSubscribers(env);
   const summary = { datesChecked: 0, subscribers: subscribers.length, emailsSent: 0, errors: 0 };
   if (subscribers.length === 0) {
@@ -37,12 +37,13 @@ export async function runCheck(env, { now = new Date() } = {}) {
   // Only ask the booking site about weekdays somebody actually wants.
   const wanted = new Set(subscribers.flatMap((s) => s.days || []));
   const horizon = upcomingDates(HORIZON_DAYS, now).filter((d) => wanted.has(d.weekday));
+  const today = upcomingDates(1, now)[0].date;
 
   // Sequential on purpose: be gentle with the booking site.
   const slotsByDate = {};
   for (const { date } of horizon) {
     try {
-      slotsByDate[date] = await fetchSlots(date);
+      slotsByDate[date] = await fetchSlots(date, fetchOpts);
       summary.datesChecked++;
     } catch (err) {
       slotsByDate[date] = [];
@@ -53,7 +54,8 @@ export async function runCheck(env, { now = new Date() } = {}) {
 
   for (const sub of subscribers) {
     try {
-      const fresh = findMatches(sub, horizon, slotsByDate);
+      const seenIds = JSON.parse((await env.PREFERENCES.get(keys.seen(sub.email))) || '[]');
+      const fresh = unseen(findMatches(sub, horizon, slotsByDate), seenIds);
       if (fresh.length === 0) continue;
 
       const { manageUrl, unsubscribeUrl } = await manageLinks(env, sub.email);
@@ -65,6 +67,13 @@ export async function runCheck(env, { now = new Date() } = {}) {
         continue;
       }
       summary.emailsSent++;
+      await env.PREFERENCES.put(
+        keys.seen(sub.email),
+        JSON.stringify(updateSeen(seenIds, fresh, today)),
+        {
+          expirationTtl: LIMITS.seenTtlSeconds,
+        },
+      );
     } catch (err) {
       summary.errors++;
       log('subscriber_failed', { to: maskEmail(sub.email), message: err.message });

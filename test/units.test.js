@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseSlots, upcomingDates } from '../src/availability.js';
+import { fetchWithRetry, parseSlots, upcomingDates } from '../src/availability.js';
 import { buildAlertEmail, escapeHtml } from '../src/email.js';
 import { maskEmail } from '../src/http.js';
-import { findMatches } from '../src/matching.js';
+import { findMatches, unseen, updateSeen } from '../src/matching.js';
 import { confirmToken, manageToken, signToken, verifyToken } from '../src/tokens.js';
 import { isValidEmail, parseSubscription } from '../src/validation.js';
 import { bookableSlot } from './helpers.js';
@@ -91,13 +91,15 @@ describe('tokens', () => {
 });
 
 describe('upcomingDates', () => {
-  it('returns consecutive dates with weekdays', () => {
-    const dates = upcomingDates(3, new Date('2026-07-06T12:00:00Z'));
-    expect(dates).toEqual([
-      { date: '2026-07-06', weekday: 'Monday' },
-      { date: '2026-07-07', weekday: 'Tuesday' },
-      { date: '2026-07-08', weekday: 'Wednesday' },
-    ]);
+  it('uses the London calendar date, not UTC', () => {
+    // 23:30 UTC on 1 July is 00:30 on 2 July in London (BST).
+    const [first] = upcomingDates(1, new Date('2026-07-01T23:30:00Z'));
+    expect(first).toEqual({ date: '2026-07-02', weekday: 'Thursday' });
+  });
+
+  it('steps across the end of British Summer Time without skipping a day', () => {
+    const dates = upcomingDates(3, new Date('2026-10-24T12:00:00Z')).map((d) => d.date);
+    expect(dates).toEqual(['2026-10-24', '2026-10-25', '2026-10-26']);
   });
 });
 
@@ -121,6 +123,38 @@ describe('parseSlots', () => {
   });
 });
 
+describe('fetchWithRetry', () => {
+  const fast = { timeoutMs: 1000, retries: 2, baseDelayMs: 1 };
+
+  it('retries server errors and then succeeds', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('', { status: 503 }))
+      .mockResolvedValueOnce(new Response('', { status: 429 }))
+      .mockResolvedValueOnce(new Response('ok', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await fetchWithRetry('https://x.test', {}, fast);
+    expect(await res.text()).toBe('ok');
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not retry a client error', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('', { status: 404 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(fetchWithRetry('https://x.test', {}, fast)).rejects.toThrow('HTTP 404');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives up after the retry budget on network errors', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(fetchWithRetry('https://x.test', {}, fast)).rejects.toThrow(
+      /gave up after 3 attempts/,
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+});
+
 describe('matching', () => {
   const horizon = [
     { date: '2026-07-06', weekday: 'Monday' },
@@ -138,6 +172,20 @@ describe('matching', () => {
 
   it('tolerates a record with missing fields', () => {
     expect(findMatches({}, horizon, slotsByDate)).toEqual([]);
+  });
+
+  it('filters out slots already emailed and prunes past dates', () => {
+    const matches = findMatches(
+      { days: ['Monday', 'Tuesday'], times: ['07:00'] },
+      horizon,
+      slotsByDate,
+    );
+    const fresh = unseen(matches, ['2026-07-06T07:00']);
+    expect(fresh.map((m) => m.date)).toEqual(['2026-07-07']);
+    expect(updateSeen(['2026-07-01T07:00', '2026-07-06T07:00'], fresh, '2026-07-06')).toEqual([
+      '2026-07-06T07:00',
+      '2026-07-07T07:00',
+    ]);
   });
 });
 
