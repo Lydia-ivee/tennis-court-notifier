@@ -9,6 +9,9 @@ workers_dev = true
 # Where the site is served. Used to build confirm and unsubscribe links,
 # including from the cron job, which has no incoming request to read it from.
 PUBLIC_URL = "https://tennis-court-notifier.YOUR_SUBDOMAIN.workers.dev"
+# Public half of the push alert key pair (`npm run vapid:generate`). The private
+# half is the VAPID_PRIVATE_KEY secret. Leave both unset to run email-only.
+VAPID_PUBLIC_KEY = ""
 
 [assets]
 directory = "./public"
@@ -37,6 +40,7 @@ name = "tennis-court-notifier-prod"
 
 [env.production.vars]
 PUBLIC_URL = "https://YOUR_PRODUCTION_DOMAIN"
+VAPID_PUBLIC_KEY = ""
 
 [env.production.assets]
 directory = "./public"

@@ -7,6 +7,29 @@ export const BOOKING = {
   bookingPage: 'https://bookings.better.org.uk/location/islington-tennis-centre/highbury-tennis',
 };
 
+// The booking site's page for one date, so a tap lands on the right day.
+export const bookingUrlFor = (date) => `${BOOKING.bookingPage}/${date}/by-time`;
+
+export const PUSH = {
+  // Devices per subscriber; adding another drops the oldest.
+  maxDevices: 5,
+  // How long a push service should keep trying to deliver an alert.
+  ttlSeconds: 60 * 60,
+  // Minimum gap between "send a test" presses.
+  testCooldownSeconds: 60,
+  maxEndpointLength: 2048,
+};
+
+// Emailed codes that link an installed app to a subscription.
+export const LINK_CODE = {
+  digits: 8,
+  ttlSeconds: 10 * 60,
+  maxAttempts: 5,
+  // Minimum gap between codes sent to the same inbox: stops inbox flooding
+  // and caps how many codes an attacker can try to guess.
+  cooldownSeconds: 10 * 60,
+};
+
 // The courts are in London, so "today" means today in London, not in UTC.
 export const TIME_ZONE = 'Europe/London';
 
@@ -53,6 +76,9 @@ export const keys = {
   subscriber: (email) => `pref:${normaliseEmail(email)}`,
   seen: (email) => `seen:${normaliseEmail(email)}`,
   cooldown: (email) => `cooldown:${normaliseEmail(email)}`,
+  pushTestCooldown: (email) => `pushtest:${normaliseEmail(email)}`,
+  linkCode: (email) => `linkcode:${normaliseEmail(email)}`,
+  linkCooldown: (email) => `linkcooldown:${normaliseEmail(email)}`,
   subscriberPrefix: 'pref:',
   // Outside the pref: prefix so it is never mistaken for a subscriber.
   status: 'status:last',

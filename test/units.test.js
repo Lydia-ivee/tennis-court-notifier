@@ -2,6 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchWithRetry, parseSlots, upcomingDates } from '../src/availability.js';
 import { buildAlertEmail, escapeHtml } from '../src/email.js';
 import { maskEmail } from '../src/http.js';
+import { deviceLabel, upsertDevice, withoutDevices } from '../src/devices.js';
+import { buildPushPayload, buildTestPayload } from '../src/notifications.js';
+import { generateCode } from '../src/linking.js';
 import { findMatches, isPaused, unseen, updateSeen } from '../src/matching.js';
 import { confirmToken, manageToken, signToken, verifyToken } from '../src/tokens.js';
 import { isValidEmail, parseSettings, parseSubscription } from '../src/validation.js';
@@ -253,6 +256,9 @@ describe('email', () => {
       'https://x.test/manage',
     );
     expect(text).toContain('- Monday 2026-07-06, 07:00-08:00, 2 courts · £10');
+    expect(text).toContain(
+      'Book: https://bookings.better.org.uk/location/islington-tennis-centre/highbury-tennis/2026-07-06/by-time',
+    );
     expect(text).toContain('Settings: https://x.test/manage');
     expect(text).toContain('Pause for a week: https://x.test/manage&action=snooze');
     expect(text).toContain('Turn off: https://x.test/manage&action=off');
@@ -262,5 +268,76 @@ describe('email', () => {
 describe('maskEmail', () => {
   it('hides the local part in logs', () => {
     expect(maskEmail('ace@example.com')).toBe('a***@example.com');
+  });
+});
+
+describe('buildPushPayload', () => {
+  const slot = (date, weekday, start, price) => ({ date, weekday, start, price });
+
+  it('names a single slot in the title', () => {
+    expect(buildPushPayload([slot('2026-11-26', 'Thursday', '19:00', '£12.40')])).toEqual({
+      title: 'Court free: Thu 7pm',
+      body: 'Thu 26 Nov, 19:00 · £12.40',
+      url: 'https://bookings.better.org.uk/location/islington-tennis-centre/highbury-tennis/2026-11-26/by-time',
+      tag: 'court-alert',
+    });
+  });
+
+  it('summarises several slots, soonest first, and links to the soonest date', () => {
+    const payload = buildPushPayload([
+      slot('2026-11-28', 'Saturday', '09:00'),
+      slot('2026-11-24', 'Tuesday', '18:00'),
+      slot('2026-11-24', 'Tuesday', '07:00'),
+      slot('2026-11-29', 'Sunday', '10:00'),
+      slot('2026-11-30', 'Monday', '12:00'),
+    ]);
+    expect(payload.title).toBe('5 courts free at Highbury');
+    expect(payload.body.split('\n')).toEqual([
+      'Tue 24 Nov, 07:00',
+      'Tue 24 Nov, 18:00',
+      'Sat 28 Nov, 09:00',
+      'and 2 more',
+    ]);
+    expect(payload.url).toMatch(/2026-11-24\/by-time$/);
+  });
+});
+
+describe('devices', () => {
+  it.each([
+    ['Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)', 'iPhone'],
+    ['Mozilla/5.0 (Linux; Android 15; Pixel 9)', 'Android'],
+    ['Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', 'Mac'],
+    ['Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'Windows'],
+    ['', 'Browser'],
+  ])('labels %j as %s', (ua, label) => expect(deviceLabel(ua)).toBe(label));
+
+  it('replaces a re-registered device and keeps the newest five', () => {
+    const d = (n) => ({ endpoint: `e${n}` });
+    let list = [];
+    for (const n of [1, 2, 3, 4, 5, 6, 3]) list = upsertDevice(list, d(n));
+    expect(list.map((x) => x.endpoint)).toEqual(['e2', 'e4', 'e5', 'e6', 'e3']);
+  });
+
+  it('turns email back on when the last device goes', () => {
+    const record = { emailAlerts: false, push: [{ endpoint: 'a' }, { endpoint: 'b' }] };
+    expect(withoutDevices(record, ['a'])).toMatchObject({ emailAlerts: false });
+    expect(withoutDevices(record, ['a', 'b'])).toMatchObject({ emailAlerts: true, push: [] });
+  });
+});
+
+describe('generateCode', () => {
+  it('always gives eight digits', () => {
+    for (let i = 0; i < 500; i++) expect(generateCode()).toMatch(/^\d{8}$/);
+  });
+});
+
+describe('buildTestPayload', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("links to today's booking page in London, not UTC", () => {
+    vi.useFakeTimers();
+    // 23:30 UTC on 14 June is 00:30 on 15 June in London.
+    vi.setSystemTime(new Date('2026-06-14T23:30:00Z'));
+    expect(buildTestPayload().url).toMatch(/2026-06-15\/by-time$/);
   });
 });

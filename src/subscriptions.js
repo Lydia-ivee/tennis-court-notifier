@@ -1,8 +1,11 @@
-import { LIMITS, keys } from './config.js';
+import { LIMITS, PUSH, keys } from './config.js';
+import { deviceId, deviceLabel, pruneDevices, upsertDevice, withoutDevices } from './devices.js';
 import { buildConfirmEmail, sendEmail } from './email.js';
 import { HttpError, bearerToken, json, log, maskEmail, readJson } from './http.js';
 import { confirmToken, manageToken, verifyToken } from './tokens.js';
-import { parseSettings, parseSubscription } from './validation.js';
+import { buildTestPayload } from './notifications.js';
+import { parsePushSubscription, parseSettings, parseSubscription } from './validation.js';
+import { sendPush, vapidFromEnv } from './webpush.js';
 
 // Base URL for links in emails. Cron runs have no request, so PUBLIC_URL is
 // the source of truth; the request origin is only a local-dev fallback.
@@ -23,19 +26,47 @@ export async function manageLinks(env, email, request) {
   };
 }
 
-const publicView = ({ email, days, times, paused, pausedUntil }) => ({
-  email,
-  days,
-  times,
-  paused: Boolean(paused),
-  pausedUntil: pausedUntil || null,
-});
+// What the settings page sees. Push endpoints are capability URLs, so only a
+// hashed id and a coarse label leave the server.
+async function publicView({ email, days, times, paused, pausedUntil, emailAlerts, push = [] }) {
+  return {
+    email,
+    days,
+    times,
+    paused: Boolean(paused),
+    pausedUntil: pausedUntil || null,
+    emailAlerts: emailAlerts !== false,
+    devices: await Promise.all(
+      push.map(async (d) => ({
+        id: await deviceId(d.endpoint),
+        label: d.label,
+        addedAt: d.addedAt,
+      })),
+    ),
+  };
+}
 
-async function enforceRateLimit(request, env) {
+async function loadRecord(env, email) {
+  const stored = await env.PREFERENCES.get(keys.subscriber(email));
+  if (!stored) throw new HttpError(404, 'No alerts are set up for this address.');
+  return JSON.parse(stored);
+}
+
+async function saveRecord(env, record) {
+  const next = { ...record, updatedAt: new Date().toISOString() };
+  await env.PREFERENCES.put(keys.subscriber(record.email), JSON.stringify(next));
+  return next;
+}
+
+// Apply the rate limit binding to any key. No binding (local dev, tests) means no limit.
+export async function rateLimit(env, key, message = 'Too many requests. Try again in a minute.') {
   if (!env.SUBSCRIBE_LIMITER) return;
-  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  const { success } = await env.SUBSCRIBE_LIMITER.limit({ key: ip });
-  if (!success) throw new HttpError(429, 'Too many requests. Try again in a minute.');
+  const { success } = await env.SUBSCRIBE_LIMITER.limit({ key });
+  if (!success) throw new HttpError(429, message);
+}
+
+export async function enforceRateLimit(request, env) {
+  await rateLimit(env, request.headers.get('CF-Connecting-IP') || 'unknown');
 }
 
 async function requireManageToken(request, env, token = bearerToken(request)) {
@@ -99,7 +130,7 @@ export async function confirmSubscription(request, env) {
   log('subscription_confirmed', { to: maskEmail(email) });
 
   return json({
-    preferences: publicView(record),
+    preferences: await publicView(record),
     manageToken: await manageToken(email, env.TOKEN_SECRET),
   });
 }
@@ -109,7 +140,7 @@ export async function getSubscription(request, env) {
   const email = await requireManageToken(request, env);
   const stored = await env.PREFERENCES.get(keys.subscriber(email));
   if (!stored) throw new HttpError(404, 'No alerts are set up for this address.');
-  return json({ preferences: publicView(JSON.parse(stored)) });
+  return json({ preferences: await publicView(JSON.parse(stored)) });
 }
 
 // PATCH /api/subscription  (Authorization: Bearer <manage token>)
@@ -118,14 +149,79 @@ export async function getSubscription(request, env) {
 export async function updateSubscription(request, env) {
   const email = await requireManageToken(request, env);
   const changes = parseSettings(await readJson(request, LIMITS.maxBodyBytes));
-  const key = keys.subscriber(email);
-  const stored = await env.PREFERENCES.get(key);
-  if (!stored) throw new HttpError(404, 'No alerts are set up for this address.');
-
-  const record = { ...JSON.parse(stored), ...changes, updatedAt: new Date().toISOString() };
-  await env.PREFERENCES.put(key, JSON.stringify(record));
+  const record = { ...(await loadRecord(env, email)), ...changes };
+  if (record.emailAlerts === false && !(record.push || []).length) {
+    throw new HttpError(400, 'Keep at least one way to hear of courts: email or a device.');
+  }
+  const saved = await saveRecord(env, record);
   log('subscription_updated', { to: maskEmail(email), fields: Object.keys(changes) });
-  return json({ preferences: publicView(record) });
+  return json({ preferences: await publicView(saved) });
+}
+
+// GET /api/push/key  The VAPID public key browsers need to subscribe.
+export async function getPushKey(_request, env) {
+  const vapid = vapidFromEnv(env);
+  if (!vapid) throw new HttpError(404, 'Phone alerts are not set up on this server.');
+  return json({ publicKey: vapid.publicKey }, 200, { 'Cache-Control': 'public, max-age=3600' });
+}
+
+// POST /api/subscription/push  { subscription }  Register this device.
+export async function addPushDevice(request, env) {
+  const email = await requireManageToken(request, env);
+  if (!vapidFromEnv(env)) throw new HttpError(404, 'Phone alerts are not set up on this server.');
+  const subscription = parsePushSubscription(await readJson(request, LIMITS.maxBodyBytes));
+  const record = await loadRecord(env, email);
+  const device = {
+    ...subscription,
+    label: deviceLabel(request.headers.get('User-Agent') || ''),
+    addedAt: new Date().toISOString(),
+  };
+  const saved = await saveRecord(env, { ...record, push: upsertDevice(record.push, device) });
+  log('push_device_added', { to: maskEmail(email), label: device.label });
+  return json({ preferences: await publicView(saved) }, 201);
+}
+
+// DELETE /api/subscription/push  { id }  Forget a device.
+export async function removePushDevice(request, env) {
+  const email = await requireManageToken(request, env);
+  const { id } = await readJson(request, LIMITS.maxBodyBytes);
+  if (typeof id !== 'string') throw new HttpError(400, 'A device id is required.');
+  const record = await loadRecord(env, email);
+  const ids = await Promise.all((record.push || []).map((d) => deviceId(d.endpoint)));
+  const target = (record.push || [])[ids.indexOf(id)];
+  if (!target) throw new HttpError(404, 'That device is not registered.');
+  const saved = await saveRecord(env, withoutDevices(record, [target.endpoint]));
+  return json({ preferences: await publicView(saved) });
+}
+
+// POST /api/subscription/push/test  Send a test notification to every device.
+export async function testPush(request, env) {
+  const email = await requireManageToken(request, env);
+  const vapid = vapidFromEnv(env);
+  if (!vapid) throw new HttpError(404, 'Phone alerts are not set up on this server.');
+  const record = await loadRecord(env, email);
+  if (!(record.push || []).length) throw new HttpError(400, 'No devices are registered yet.');
+  if (await env.PREFERENCES.get(keys.pushTestCooldown(email))) {
+    throw new HttpError(429, 'A test went out a moment ago. Try again in a minute.');
+  }
+  await env.PREFERENCES.put(keys.pushTestCooldown(email), '1', {
+    expirationTtl: PUSH.testCooldownSeconds,
+  });
+
+  const payload = buildTestPayload();
+  const results = await Promise.all(record.push.map((d) => sendPush(d, payload, vapid)));
+  await pruneDevices(
+    env,
+    email,
+    record.push.filter((_, i) => results[i].gone).map((d) => d.endpoint),
+  );
+  const sent = results.filter((r) => r.ok).length;
+  if (sent === 0)
+    throw new HttpError(
+      502,
+      'The push service did not accept the test. Try turning this device off and on.',
+    );
+  return json({ sent });
 }
 
 // GET /api/status  When the courts were last checked, for the sign-up page.
@@ -149,9 +245,17 @@ export async function deleteSubscription(request, env) {
 }
 
 // POST /api/unsubscribe?token=...  RFC 8058 one-click unsubscribe from mail clients.
+// It comes from the email, so it stops email. Someone who also has push
+// devices keeps those; with no devices left, the whole record goes.
 export async function oneClickUnsubscribe(request, env) {
   const token = new URL(request.url).searchParams.get('token');
   const email = await requireManageToken(request, env, token);
+  const stored = await env.PREFERENCES.get(keys.subscriber(email));
+  if (stored && (JSON.parse(stored).push || []).length) {
+    await saveRecord(env, { ...JSON.parse(stored), emailAlerts: false });
+    log('email_unsubscribed', { to: maskEmail(email) });
+    return json({ message: 'Emails stopped. Phone alerts carry on.' });
+  }
   await removeSubscriber(env, email);
   return json({ message: 'Alerts stopped.' });
 }

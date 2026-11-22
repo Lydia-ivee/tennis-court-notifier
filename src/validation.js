@@ -1,5 +1,7 @@
-import { ALLOWED_TIMES, LIMITS, WEEKDAYS } from './config.js';
+import { ALLOWED_TIMES, LIMITS, PUSH, WEEKDAYS } from './config.js';
+import { fromBase64Url } from './encoding.js';
 import { HttpError } from './http.js';
+import { isAllowedEndpoint } from './webpush.js';
 
 const EMAIL_PATTERN = /^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/;
 
@@ -46,6 +48,7 @@ export function parseSubscription(body) {
 //   days, times       replace the subscriber's choices
 //   paused            true turns alerts off, false turns them back on
 //   pauseDays         with paused: true, pause for this many days (1 to 30)
+//   emailAlerts       false stops alert emails (push devices only)
 export function parseSettings(body, now = Date.now()) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     throw new HttpError(400, 'Expected a JSON object.');
@@ -72,6 +75,43 @@ export function parseSettings(body, now = Date.now()) {
     throw new HttpError(400, 'pauseDays needs paused: true.');
   }
 
+  if ('emailAlerts' in body) {
+    if (typeof body.emailAlerts !== 'boolean') {
+      throw new HttpError(400, 'emailAlerts must be true or false.');
+    }
+    changes.emailAlerts = body.emailAlerts;
+  }
+
   if (Object.keys(changes).length === 0) throw new HttpError(400, 'Nothing to change.');
   return changes;
+}
+
+function decodedLength(value) {
+  try {
+    return fromBase64Url(value).length;
+  } catch {
+    return -1;
+  }
+}
+
+// Validate a browser PushSubscription (as produced by subscription.toJSON()).
+export function parsePushSubscription(body) {
+  const sub = body?.subscription;
+  const endpoint = sub?.endpoint;
+  const { p256dh, auth } = sub?.keys || {};
+
+  if (
+    typeof endpoint !== 'string' ||
+    endpoint.length > PUSH.maxEndpointLength ||
+    !isAllowedEndpoint(endpoint)
+  ) {
+    throw new HttpError(400, 'That push service is not supported.');
+  }
+  if (decodedLength(p256dh) !== 65 || fromBase64Url(p256dh)[0] !== 4) {
+    throw new HttpError(400, 'Invalid push subscription key.');
+  }
+  if (decodedLength(auth) !== 16) {
+    throw new HttpError(400, 'Invalid push subscription secret.');
+  }
+  return { endpoint, keys: { p256dh, auth } };
 }

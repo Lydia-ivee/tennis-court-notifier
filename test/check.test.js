@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runCheck } from '../src/check.js';
-import { bookableSlot, createEnv, stubFetch } from './helpers.js';
+import { bookableSlot, createEnv, makeDevice, stubFetch } from './helpers.js';
 
 // Monday 6 July 2026, midday in London.
 const NOW = new Date('2026-07-06T11:00:00Z');
@@ -133,6 +133,131 @@ describe('runCheck', () => {
       checkedAt: NOW.toISOString(),
       openSlots: 4,
       datesChecked: 2,
+    });
+  });
+
+  describe('push alerts', () => {
+    const phone = makeDevice('https://web.push.apple.com/phone');
+    const laptop = makeDevice('https://fcm.googleapis.com/fcm/send/laptop');
+    const asDevice = (d, label) => ({ ...d.subscription, label, addedAt: '2026-07-01T00:00:00Z' });
+
+    it('pushes to every device with a deep link to the slot date', async () => {
+      await addSubscriber('a@example.com', ['Monday'], ['18:00'], {
+        push: [asDevice(phone, 'iPhone'), asDevice(laptop, 'Mac')],
+      });
+      const { pushes, sent } = stubFetch({
+        bookingHandler: () => ({ data: [bookableSlot('18:00')] }),
+      });
+      const summary = await runCheck(env, { now: NOW, fetchOpts });
+
+      expect(summary).toMatchObject({ emailsSent: 1, pushesSent: 2, errors: 0 });
+      expect(sent).toHaveLength(1);
+      // Devices are notified in parallel, so arrival order is not fixed.
+      expect(pushes.map((p) => p.url).sort()).toEqual([
+        'https://fcm.googleapis.com/fcm/send/laptop',
+        'https://web.push.apple.com/phone',
+      ]);
+      const toPhone = pushes.find((p) => p.url === 'https://web.push.apple.com/phone');
+      expect(toPhone.headers).toMatchObject({ TTL: '3600', Urgency: 'high' });
+      expect(phone.read(toPhone.body)).toEqual({
+        title: 'Court free: Mon 6pm',
+        body: 'Mon 6 Jul, 18:00 · £12.40',
+        url: 'https://bookings.better.org.uk/location/islington-tennis-centre/highbury-tennis/2026-07-06/by-time',
+        tag: 'court-alert',
+      });
+    });
+
+    it('can skip email entirely', async () => {
+      await addSubscriber('a@example.com', ['Monday'], ['18:00'], {
+        emailAlerts: false,
+        push: [asDevice(phone, 'iPhone')],
+      });
+      const { pushes, sent } = stubFetch({
+        bookingHandler: () => ({ data: [bookableSlot('18:00')] }),
+      });
+      await runCheck(env, { now: NOW, fetchOpts });
+      expect(sent).toHaveLength(0);
+      expect(pushes).toHaveLength(1);
+      expect(await env.PREFERENCES.get('seen:a@example.com')).not.toBeNull();
+    });
+
+    it('prunes devices that have gone, emails instead, and turns email back on', async () => {
+      await addSubscriber('a@example.com', ['Monday'], ['18:00'], {
+        emailAlerts: false,
+        push: [asDevice(phone, 'iPhone')],
+      });
+      const { sent } = stubFetch({
+        bookingHandler: () => ({ data: [bookableSlot('18:00')] }),
+        pushStatus: () => 410,
+      });
+      const summary = await runCheck(env, { now: NOW, fetchOpts });
+      expect(summary).toMatchObject({ devicesRemoved: 1, emailsSent: 1, errors: 0 });
+      expect(sent).toHaveLength(1);
+      const record = JSON.parse(await env.PREFERENCES.get('pref:a@example.com'));
+      expect(record).toMatchObject({ push: [], emailAlerts: true });
+    });
+
+    it('falls back to email when email is off but no push gets through', async () => {
+      await addSubscriber('a@example.com', ['Monday'], ['18:00'], {
+        emailAlerts: false,
+        push: [asDevice(phone, 'iPhone')],
+      });
+      const { sent } = stubFetch({
+        bookingHandler: () => ({ data: [bookableSlot('18:00')] }),
+        pushStatus: () => 403,
+      });
+      const summary = await runCheck(env, { now: NOW, fetchOpts });
+      expect(summary).toMatchObject({ emailsSent: 1, pushesSent: 0, errors: 0 });
+      expect(sent).toHaveLength(1);
+      // A 403 is not proof the device is gone, so it is kept.
+      const record = JSON.parse(await env.PREFERENCES.get('pref:a@example.com'));
+      expect(record.push).toHaveLength(1);
+    });
+
+    it('falls back to email when email is off and push is not configured', async () => {
+      delete env.VAPID_PRIVATE_KEY;
+      await addSubscriber('a@example.com', ['Monday'], ['18:00'], {
+        emailAlerts: false,
+        push: [asDevice(phone, 'iPhone')],
+      });
+      const { sent } = stubFetch({ bookingHandler: () => ({ data: [bookableSlot('18:00')] }) });
+      await runCheck(env, { now: NOW, fetchOpts });
+      expect(sent).toHaveLength(1);
+    });
+
+    it('counts a push alone as delivered when email fails', async () => {
+      await addSubscriber('a@example.com', ['Monday'], ['18:00'], {
+        push: [asDevice(phone, 'iPhone')],
+      });
+      stubFetch({ bookingHandler: () => ({ data: [bookableSlot('18:00')] }), sendgridStatus: 500 });
+      const summary = await runCheck(env, { now: NOW, fetchOpts });
+      expect(summary).toMatchObject({ emailsSent: 0, pushesSent: 1, errors: 0 });
+    });
+
+    it('keeps devices on a transient push failure', async () => {
+      await addSubscriber('a@example.com', ['Monday'], ['18:00'], {
+        push: [asDevice(phone, 'iPhone')],
+      });
+      stubFetch({
+        bookingHandler: () => ({ data: [bookableSlot('18:00')] }),
+        pushStatus: () => 503,
+      });
+      await runCheck(env, { now: NOW, fetchOpts });
+      const record = JSON.parse(await env.PREFERENCES.get('pref:a@example.com'));
+      expect(record.push).toHaveLength(1);
+    });
+
+    it('sends email only when push is not configured on the server', async () => {
+      delete env.VAPID_PRIVATE_KEY;
+      await addSubscriber('a@example.com', ['Monday'], ['18:00'], {
+        push: [asDevice(phone, 'iPhone')],
+      });
+      const { pushes, sent } = stubFetch({
+        bookingHandler: () => ({ data: [bookableSlot('18:00')] }),
+      });
+      await runCheck(env, { now: NOW, fetchOpts });
+      expect(pushes).toHaveLength(0);
+      expect(sent).toHaveLength(1);
     });
   });
 });

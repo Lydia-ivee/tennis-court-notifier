@@ -1,4 +1,4 @@
-import { BOOKING } from './config.js';
+import { bookingUrlFor } from './config.js';
 import { log, maskEmail } from './http.js';
 
 // Escape anything interpolated into email HTML. Slot data comes from a third
@@ -60,12 +60,14 @@ function settingsLinks(manageUrl) {
 
 export function buildAlertEmail(email, matches, manageUrl) {
   const links = settingsLinks(manageUrl);
+  // Matches come in date order, so the button opens the soonest slot's day.
+  const bookUrl = bookingUrlFor(matches[0].date);
   const rows = matches
     .map((m) => {
       const { courts, price } = describeSlot(m);
       return `
         <tr>
-          <td style="${CELL}color:#2c2415;"><strong>${escapeHtml(m.weekday)}</strong> ${escapeHtml(m.date)}</td>
+          <td style="${CELL}color:#2c2415;"><a href="${escapeHtml(bookingUrlFor(m.date))}" style="color:#2c2415;"><strong>${escapeHtml(m.weekday)}</strong> ${escapeHtml(m.date)}</a></td>
           <td style="${CELL}color:#2c2415;">${escapeHtml(m.start)}&ndash;${escapeHtml(m.end)}</td>
           <td style="${CELL}color:#4a5d3a;text-align:center;">${escapeHtml(courts + price)}</td>
         </tr>`;
@@ -76,7 +78,7 @@ export function buildAlertEmail(email, matches, manageUrl) {
     heading: 'A Court Falls Free!',
     subheading: 'Highbury Fields Tennis - matches for thy chosen hours',
     body: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;background-color:rgba(255,255,255,0.4);border:1px solid #d8c8a0;border-radius:4px;">${rows}</table>
-      ${button(BOOKING.bookingPage, 'Claim thy court ⚔️')}`,
+      ${button(bookUrl, 'Claim thy court ⚔️')}`,
     footer: `Sent to ${escapeHtml(email)} by the Tennis Court Notifier.<br>
       ${links
         .map(([label, href]) => `<a href="${escapeHtml(href)}" style="color:#8a7a54;">${label}</a>`)
@@ -91,7 +93,7 @@ export function buildAlertEmail(email, matches, manageUrl) {
       return `- ${m.weekday} ${m.date}, ${m.start}-${m.end}, ${courts}${price}`;
     }),
     '',
-    `Book: ${BOOKING.bookingPage}`,
+    `Book: ${bookUrl}`,
     '',
     ...links.map(([label, href]) => `${label}: ${href}`),
   ].join('\n');
@@ -119,6 +121,24 @@ export function buildConfirmEmail(confirmUrl) {
   ].join('\n');
 
   return { subject: 'Confirm thy tennis court alerts', html, text };
+}
+
+export function buildLinkCodeEmail(code) {
+  const html = frame({
+    heading: 'Thy Linking Code',
+    subheading: 'To link the Court Quest app on thy device',
+    body: `<p style="margin:0;${FONT}color:#2c2415;text-align:center;">Type this code into the app:</p>
+      <p style="margin:16px 0 0;${FONT}font-size:34px;letter-spacing:6px;font-weight:bold;color:#2c2415;text-align:center;">${escapeHtml(code)}</p>`,
+    footer:
+      'It expires in 10 minutes. If thou didst not ask for it, ignore this email: nothing changes without the code.',
+  });
+  const text = [
+    `Thy Court Quest linking code is ${code}`,
+    '',
+    'Type it into the app. It expires in 10 minutes.',
+    'If you did not ask for it, ignore this email: nothing changes without the code.',
+  ].join('\n');
+  return { subject: `${code} is thy Court Quest code`, html, text };
 }
 
 // Send through SendGrid's Mail Send API. Returns true on success and never
