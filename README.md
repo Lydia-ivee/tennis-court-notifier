@@ -8,20 +8,19 @@ A small Cloudflare Worker that watches court availability at Highbury tennis cen
 
 - A cron trigger runs the Worker every 30 minutes.
 - It calls the booking site's JSON availability endpoint for the next few days. The booking page is a single-page app, so the slots are not in the HTML and there is nothing to scrape.
-- People sign up on a small static page with their email, the weekdays they want and the times they want.
-- Preferences are stored in Cloudflare KV. Each person can change or delete theirs.
+- People sign up on a small static page with their email, the weekdays they want and the times they want, then confirm from an email (double opt-in).
+- Preferences are stored in Cloudflare KV. Each alert carries a signed link to manage or stop them.
 - Matching slots are emailed with SendGrid, with a link to book.
 
 ## Run it
 
 1. `npm install`
 2. Copy `wrangler.example.toml` to `wrangler.toml` and fill in your Cloudflare account ID and a KV namespace ID.
-3. Set the secrets: `wrangler secret put SENDGRID_API_KEY` and `wrangler secret put FROM_EMAIL`.
+3. Set the secrets: `wrangler secret put SENDGRID_API_KEY`, `wrangler secret put FROM_EMAIL`, and `TOKEN_SECRET` (at least 32 random characters, e.g. `openssl rand -base64 48 | npx wrangler secret put TOKEN_SECRET`). Set `PUBLIC_URL` in `wrangler.toml`.
 4. `npx wrangler dev` to try it locally, `npx wrangler deploy` to deploy it.
 
 ## Limits
 
-- No tests yet.
 - It depends on an undocumented booking endpoint that can change without notice.
 - It checks every 30 minutes, so a slot can be gone before the email lands.
 - Be kind to the booking site: keep the polling gentle.

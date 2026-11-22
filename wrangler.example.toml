@@ -1,34 +1,55 @@
+# Copy to wrangler.toml and fill in the YOUR_* values. wrangler.toml is git-ignored.
 name = "tennis-court-notifier"
 main = "src/index.js"
-compatibility_date = "2024-11-01"
+compatibility_date = "2026-10-01"
 account_id = "YOUR_CLOUDFLARE_ACCOUNT_ID"
 workers_dev = true
+
+[vars]
+# Where the site is served. Used to build confirm and unsubscribe links,
+# including from the cron job, which has no incoming request to read it from.
+PUBLIC_URL = "https://tennis-court-notifier.YOUR_SUBDOMAIN.workers.dev"
 
 [assets]
 directory = "./public"
 binding = "ASSETS"
 
 [triggers]
-crons = ["*/30 * * * *"]  # every 30 mins
+crons = ["*/30 * * * *"] # every 30 minutes
 
 [[kv_namespaces]]
 binding = "PREFERENCES"
 id = "YOUR_KV_NAMESPACE_ID"
-preview_id = "YOUR_KV_NAMESPACE_ID"
 
-# Named environments do NOT inherit top-level bindings — every binding above
+# Sign-up requests per IP address. namespace_id is any number unique to your account.
+[[ratelimits]]
+name = "SUBSCRIBE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 5, period = 60 }
+
+[observability]
+enabled = true
+
+# Named environments do NOT inherit top-level bindings: every binding above
 # must be repeated here for `wrangler deploy --env production` to work.
 [env.production]
 name = "tennis-court-notifier-prod"
+
+[env.production.vars]
+PUBLIC_URL = "https://YOUR_PRODUCTION_DOMAIN"
 
 [env.production.assets]
 directory = "./public"
 binding = "ASSETS"
 
 [env.production.triggers]
-crons = ["*/30 * * * *"]  # every 30 mins
+crons = ["*/30 * * * *"]
 
 [[env.production.kv_namespaces]]
 binding = "PREFERENCES"
 id = "YOUR_KV_NAMESPACE_ID"
-preview_id = "YOUR_KV_NAMESPACE_ID"
+
+[[env.production.ratelimits]]
+name = "SUBSCRIBE_LIMITER"
+namespace_id = "1002"
+simple = { limit = 5, period = 60 }

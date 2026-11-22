@@ -1,6 +1,6 @@
 {
   "name": "tennis-court-notifier",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "private": true,
   "description": "Cloudflare Worker that emails you when a tennis court slot opens",
   "type": "module",
@@ -13,13 +13,19 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "npm run lint && npm run format:check"
+    "check": "npm run lint && npm run format:check && npm test",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "coverage": "vitest run --coverage"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@vitest/coverage-v8": "^5.1.1",
     "eslint": "^10.15.0",
     "globals": "^17.14.0",
     "prettier": "^3.10.1",
+    "vitest": "^5.1.1",
     "wrangler": "^4.166.0"
-  }
+  },
+  "license": "MIT"
 }
