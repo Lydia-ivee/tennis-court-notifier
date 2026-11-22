@@ -48,7 +48,18 @@ function describeSlot(m) {
   return { courts, price: m.price ? ` · ${m.price}` : '' };
 }
 
+// The manage page reads ?action= from the fragment and asks for one tap to
+// confirm, so a mail scanner opening these links changes nothing.
+function settingsLinks(manageUrl) {
+  return [
+    ['Settings', manageUrl],
+    ['Pause for a week', `${manageUrl}&action=snooze`],
+    ['Turn off', `${manageUrl}&action=off`],
+  ];
+}
+
 export function buildAlertEmail(email, matches, manageUrl) {
+  const links = settingsLinks(manageUrl);
   const rows = matches
     .map((m) => {
       const { courts, price } = describeSlot(m);
@@ -67,7 +78,9 @@ export function buildAlertEmail(email, matches, manageUrl) {
     body: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;background-color:rgba(255,255,255,0.4);border:1px solid #d8c8a0;border-radius:4px;">${rows}</table>
       ${button(BOOKING.bookingPage, 'Claim thy court ⚔️')}`,
     footer: `Sent to ${escapeHtml(email)} by the Tennis Court Notifier.<br>
-      <a href="${escapeHtml(manageUrl)}" style="color:#8a7a54;">Change or stop these alerts</a>`,
+      ${links
+        .map(([label, href]) => `<a href="${escapeHtml(href)}" style="color:#8a7a54;">${label}</a>`)
+        .join(' &middot; ')}`,
   });
 
   const text = [
@@ -80,7 +93,7 @@ export function buildAlertEmail(email, matches, manageUrl) {
     '',
     `Book: ${BOOKING.bookingPage}`,
     '',
-    `Change or stop these alerts: ${manageUrl}`,
+    ...links.map(([label, href]) => `${label}: ${href}`),
   ].join('\n');
 
   return { subject: '⚔️ Court Available!', html, text };

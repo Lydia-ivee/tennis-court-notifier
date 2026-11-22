@@ -45,7 +45,7 @@ describe('sign-up with double opt-in', () => {
   it('activates the subscription on confirm and returns a manage token', async () => {
     const { res, body } = await subscribeAndConfirm();
     expect(res.status).toBe(200);
-    expect(body.preferences).toEqual(signup);
+    expect(body.preferences).toEqual({ ...signup, paused: false, pausedUntil: null });
     expect(body.manageToken).toEqual(expect.any(String));
     const stored = JSON.parse(await env.PREFERENCES.get('pref:ace@example.com'));
     expect(stored).toMatchObject({ days: ['Monday'], times: ['07:00'] });
@@ -184,6 +184,99 @@ describe('managing a subscription', () => {
     await subscribeAndConfirm();
     const res = await handleRequest(apiRequest('/api/preferences/ace%40example.com'), env);
     expect(res.status).toBe(404);
+  });
+});
+
+describe('settings', () => {
+  async function patch(token, body) {
+    return handleRequest(
+      apiRequest('/api/subscription', {
+        method: 'PATCH',
+        body,
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      env,
+    );
+  }
+  const stored = async () => JSON.parse(await env.PREFERENCES.get('pref:ace@example.com'));
+
+  it('turns alerts off and back on', async () => {
+    const { body } = await subscribeAndConfirm();
+    const off = await patch(body.manageToken, { paused: true });
+    expect(off.status).toBe(200);
+    expect((await off.json()).preferences).toMatchObject({ paused: true, pausedUntil: null });
+
+    await patch(body.manageToken, { paused: false });
+    expect(await stored()).toMatchObject({ paused: false, pausedUntil: null });
+  });
+
+  it('pauses for a set number of days', async () => {
+    const { body } = await subscribeAndConfirm();
+    const before = Date.now();
+    await patch(body.manageToken, { paused: true, pauseDays: 7 });
+    const until = new Date((await stored()).pausedUntil).getTime();
+    expect(until - before).toBeGreaterThanOrEqual(7 * 86_400_000 - 1000);
+    expect(until - before).toBeLessThan(7 * 86_400_000 + 5000);
+  });
+
+  it('changes days and times without another confirmation', async () => {
+    const { body, sent } = await subscribeAndConfirm();
+    const res = await patch(body.manageToken, { days: ['Sunday', 'Friday'], times: ['20:00'] });
+    expect(res.status).toBe(200);
+    expect(await stored()).toMatchObject({ days: ['Sunday', 'Friday'], times: ['20:00'] });
+    expect(sent).toHaveLength(1);
+  });
+
+  it.each([
+    [{}, 'Nothing to change.'],
+    [{ paused: 'yes' }, 'paused must be true or false.'],
+    [{ paused: true, pauseDays: 99 }, /pauseDays must be/],
+    [{ pauseDays: 3 }, 'pauseDays needs paused: true.'],
+    [{ days: [] }, 'Select at least one day.'],
+    [[], 'Expected a JSON object.'],
+  ])('rejects %j', async (change, message) => {
+    const { body } = await subscribeAndConfirm();
+    const res = await patch(body.manageToken, change);
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(message);
+  });
+
+  it('needs a manage token', async () => {
+    await subscribeAndConfirm();
+    const res = await patch('forged.token', { paused: true });
+    expect(res.status).toBe(401);
+    expect(await stored()).toMatchObject({ paused: false });
+  });
+
+  it('returns 404 once the subscription is deleted', async () => {
+    const { body } = await subscribeAndConfirm();
+    await env.PREFERENCES.delete('pref:ace@example.com');
+    expect((await patch(body.manageToken, { paused: true })).status).toBe(404);
+  });
+
+  it('turns alerts back on when someone confirms again', async () => {
+    const { body } = await subscribeAndConfirm();
+    await patch(body.manageToken, { paused: true });
+    await env.PREFERENCES.delete('cooldown:ace@example.com');
+    await subscribeAndConfirm();
+    expect(await stored()).toMatchObject({ paused: false });
+  });
+});
+
+describe('status', () => {
+  it('reports nothing before the first check', async () => {
+    const res = await handleRequest(apiRequest('/api/status'), env);
+    expect(await res.json()).toEqual({ checkedAt: null, openSlots: null });
+    expect(res.headers.get('Cache-Control')).toBe('public, max-age=60');
+  });
+
+  it('reports the last check', async () => {
+    await env.PREFERENCES.put(
+      'status:last',
+      JSON.stringify({ checkedAt: '2026-07-06T11:00:00.000Z', openSlots: 4, datesChecked: 2 }),
+    );
+    const res = await handleRequest(apiRequest('/api/status'), env);
+    expect(await res.json()).toMatchObject({ openSlots: 4 });
   });
 });
 

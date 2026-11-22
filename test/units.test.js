@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchWithRetry, parseSlots, upcomingDates } from '../src/availability.js';
 import { buildAlertEmail, escapeHtml } from '../src/email.js';
 import { maskEmail } from '../src/http.js';
-import { findMatches, unseen, updateSeen } from '../src/matching.js';
+import { findMatches, isPaused, unseen, updateSeen } from '../src/matching.js';
 import { confirmToken, manageToken, signToken, verifyToken } from '../src/tokens.js';
-import { isValidEmail, parseSubscription } from '../src/validation.js';
+import { isValidEmail, parseSettings, parseSubscription } from '../src/validation.js';
 import { bookableSlot } from './helpers.js';
 
 const SECRET = 'unit-test-secret-that-is-long-enough-000';
@@ -42,6 +42,37 @@ describe('validation', () => {
     [null, 'A valid email is required.'],
   ])('rejects %j', (body, message) => {
     expect(() => parseSubscription(body)).toThrow(message);
+  });
+});
+
+describe('parseSettings', () => {
+  it('accepts a partial change', () => {
+    expect(parseSettings({ times: ['22:00', '07:00'] })).toEqual({ times: ['07:00', '22:00'] });
+  });
+
+  it('turns a pause length into an end date', () => {
+    const now = Date.UTC(2026, 6, 6);
+    expect(parseSettings({ paused: true, pauseDays: 7 }, now)).toEqual({
+      paused: true,
+      pausedUntil: '2026-07-13T00:00:00.000Z',
+    });
+  });
+
+  it('clears any end date when resuming', () => {
+    expect(parseSettings({ paused: false })).toEqual({ paused: false, pausedUntil: null });
+  });
+});
+
+describe('isPaused', () => {
+  const now = new Date('2026-07-06T12:00:00Z');
+  it.each([
+    [{}, false],
+    [{ paused: false }, false],
+    [{ paused: true }, true],
+    [{ paused: true, pausedUntil: '2026-07-07T00:00:00Z' }, true],
+    [{ paused: true, pausedUntil: '2026-07-06T11:59:00Z' }, false],
+  ])('%j -> %s', (sub, expected) => {
+    expect(isPaused(sub, now)).toBe(expected);
   });
 });
 
@@ -222,7 +253,9 @@ describe('email', () => {
       'https://x.test/manage',
     );
     expect(text).toContain('- Monday 2026-07-06, 07:00-08:00, 2 courts · £10');
-    expect(text).toContain('https://x.test/manage');
+    expect(text).toContain('Settings: https://x.test/manage');
+    expect(text).toContain('Pause for a week: https://x.test/manage&action=snooze');
+    expect(text).toContain('Turn off: https://x.test/manage&action=off');
   });
 });
 

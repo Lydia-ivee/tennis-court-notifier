@@ -3,9 +3,11 @@ import { HttpError, errorResponse } from './http.js';
 import {
   confirmSubscription,
   deleteSubscription,
+  getStatus,
   getSubscription,
   oneClickUnsubscribe,
   requestSubscription,
+  updateSubscription,
 } from './subscriptions.js';
 
 // Method + path -> handler. Static files in public/ are served by Workers
@@ -14,7 +16,9 @@ const routes = {
   'POST /api/subscriptions': requestSubscription,
   'POST /api/subscriptions/confirm': confirmSubscription,
   'GET /api/subscription': getSubscription,
+  'PATCH /api/subscription': updateSubscription,
   'DELETE /api/subscription': deleteSubscription,
+  'GET /api/status': getStatus,
   'POST /api/unsubscribe': oneClickUnsubscribe,
 };
 
